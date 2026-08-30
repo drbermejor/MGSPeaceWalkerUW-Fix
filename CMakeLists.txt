@@ -60,6 +60,11 @@ endif()
 add_executable(pw_direct_launcher WIN32 launcher_wrapper/pw_direct_launcher.cpp)
 target_compile_definitions(pw_direct_launcher PRIVATE
     PWUWFIX_VERSION="${PWUWFIX_RELEASE}")
+if(NOT MSVC)
+    # MinGW's GUI CRT selects WinMain by default. The wrapper deliberately uses
+    # wWinMain so launcher paths and arguments remain Unicode-safe.
+    target_link_options(pw_direct_launcher PRIVATE -municode)
+endif()
 set_target_properties(pw_direct_launcher PROPERTIES
     OUTPUT_NAME launcher
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"

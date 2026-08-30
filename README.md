@@ -1,7 +1,7 @@
 # Peace Walker UltraWide Fix
 
-[![Build and test](https://github.com/drbermejor/PeaceWalkerUltraWideFix/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/drbermejor/PeaceWalkerUltraWideFix/actions/workflows/build-and-test.yml)
-[![Latest release](https://img.shields.io/github/v/release/drbermejor/PeaceWalkerUltraWideFix?label=latest)](https://github.com/drbermejor/PeaceWalkerUltraWideFix/releases/latest)
+[![Build and test](https://github.com/drbermejor/MGSPeaceWalkerUW-Fix/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/drbermejor/MGSPeaceWalkerUW-Fix/actions/workflows/build-and-test.yml)
+[![Latest release](https://img.shields.io/github/v/release/drbermejor/MGSPeaceWalkerUW-Fix?label=latest)](https://github.com/drbermejor/MGSPeaceWalkerUW-Fix/releases/latest)
 
 Ultrawide support for **METAL GEAR SOLID PEACE WALKER - Master Collection Version** on Windows and Linux/Proton.
 
@@ -23,7 +23,7 @@ The fix removes the original side bars and corrects the 3D projection to produce
 ## Windows — quick setup
 
 1. Close the game.
-2. Download the latest `windows.zip` from [Releases](https://github.com/drbermejor/PeaceWalkerUltraWideFix/releases/latest).
+2. Download the latest `windows.zip` from [Releases](https://github.com/drbermejor/MGSPeaceWalkerUW-Fix/releases/latest).
 3. Extract it and run `PeaceWalkerUltraWideFix-Setup.cmd`.
 4. Confirm the `mgspw` folder containing `METAL GEAR SOLID PEACE WALKER.exe`.
 5. Keep the recommended settings, or disable **Centered 16:9 HUD** if you prefer the interface to span the full display.
