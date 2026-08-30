@@ -21,7 +21,7 @@ try {
     if ((Get-FileHash $Launcher).Hash -ne (Get-FileHash (Join-Path $launcherDir "launcher.exe")).Hash) { throw "bypass not installed" }
     Start-Process -FilePath (Join-Path $launcherDir "launcher.exe") -Wait
     $arguments = Get-Content -Raw -LiteralPath (Join-Path $game "launcher-args.txt")
-    foreach ($required in @('-resolution 1','-upscale 2','-movie 1','-launcherpath launcher.exe','SteamAppId=2492660')) {
+    foreach ($required in @('-lan en','-resolution 1','-upscale 2','-movie 1','-launcherpath launcher.exe','SteamAppId=2492660')) {
         if ($arguments -notmatch [regex]::Escape($required)) { throw "launcher protocol missing: $required" }
     }
     & (Join-Path $root "scripts\windows\uninstall.ps1") -GameDir $game

@@ -83,7 +83,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, wchar_t*, int) {
     }
 
     const std::wstring region = setting(ini, L"Region", L"eu");
-    const std::wstring language = setting(ini, L"Language", L"sp");
+    const std::wstring language = setting(ini, L"Language", L"en");
     const std::wstring self_region = setting(ini, L"SelfRegion", L"EU");
     const std::wstring controller = setting(ini, L"ControllerType", L"XBOX");
     std::wstring command =

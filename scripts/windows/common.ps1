@@ -93,7 +93,7 @@ CenterHUD=$([int]$Hud)
 [Launcher]
 BypassUnityLauncher=$([int]$Bypass)
 Region=$(Get-IniValue $Path "Region" "eu")
-Language=$(Get-IniValue $Path "Language" "sp")
+Language=$(Get-IniValue $Path "Language" "en")
 SelfRegion=$(Get-IniValue $Path "SelfRegion" "EU")
 ControllerType=$(Get-IniValue $Path "ControllerType" "XBOX")
 "@

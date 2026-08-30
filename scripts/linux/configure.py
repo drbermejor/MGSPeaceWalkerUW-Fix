@@ -27,7 +27,7 @@ def write(path: Path, width: int, height: int, hud: str, bypass: str) -> None:
     if "Launcher" not in ini:
         ini["Launcher"] = {}
     ini["Launcher"].setdefault("Region", "eu")
-    ini["Launcher"].setdefault("Language", "sp")
+    ini["Launcher"].setdefault("Language", "en")
     ini["Launcher"].setdefault("SelfRegion", "EU")
     ini["Launcher"].setdefault("ControllerType", "XBOX")
     ini["Launcher"]["BypassUnityLauncher"] = boolean(bypass)

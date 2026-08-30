@@ -76,6 +76,8 @@ BypassUnityLauncher=0
 
 The launcher bypass reproduces the official Peace Walker launch protocol and starts the game as Steam's child process. It is off by default and can be toggled at any time; the original Unity launcher is backed up and restored conditionally.
 
+The public default for the bypass is English. Other supported game tokens (`sp`, `fr`, `it`, `gr`, `jp`, `pt`) can be selected with `Language=` under `[Launcher]`.
+
 ## Known limitations
 
 - Some pure or long loading illustrations can switch to full-width and appear stretched near the end of the load. Short loading screens, briefings and mission selection follow the centered presentation path.
