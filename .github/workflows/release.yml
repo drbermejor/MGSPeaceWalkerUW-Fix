@@ -29,8 +29,14 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "${GITHUB_REF_NAME}" dist/*
-          --title "Peace Walker UltraWide Fix ${GITHUB_REF_NAME} — Public candidate"
-          --notes-file "docs/RELEASE_NOTES_v0.1.0-rc.1.md"
-          --latest
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
+            gh release edit "${GITHUB_REF_NAME}" \
+              --title "Peace Walker UltraWide Fix ${GITHUB_REF_NAME} — Public candidate" \
+              --notes-file "docs/RELEASE_NOTES_v0.1.0-rc.1.md" --latest
+          else
+            gh release create "${GITHUB_REF_NAME}" dist/* \
+              --title "Peace Walker UltraWide Fix ${GITHUB_REF_NAME} — Public candidate" \
+              --notes-file "docs/RELEASE_NOTES_v0.1.0-rc.1.md" --latest
+          fi
