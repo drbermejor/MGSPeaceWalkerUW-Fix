@@ -12,8 +12,8 @@ endif()
 include(CTest)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-# El proxy de winmm se genera a partir de una lista de exports: produce el .def,
-# las declaraciones y los trampolines en ensamblador.
+# The winmm proxy is generated from an export list: it produces the .def file,
+# declarations, and assembly trampolines.
 set(WINMM_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/winmm")
 if(MSVC)
     enable_language(ASM_MASM)

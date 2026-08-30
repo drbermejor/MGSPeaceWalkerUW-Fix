@@ -1,48 +1,48 @@
-// Islote que mete la interfaz 2D en una banda 16:9 centrada, dejando el mundo a
-// pantalla completa.
+// Code island that fits the 2D interface into a centered 16:9 band while leaving
+// the world full-screen.
 //
-// El juego renderiza el mundo a 1920x1088 -- exactamente 480x4 y 272x4, cuatro
-// veces la resolucion de PSP -- en un objetivo aparte, y dibuja la interfaz
-// encima, en el mismo objetivo. En todo el binario hay UNA sola llamada a
-// RSSetViewports (0x17E44), dentro de una envoltura en 0x17DC0 que recibe
-// (x, y, w, h) como enteros. Se desvian cinco bytes de esa envoltura (0x17DD3).
+// The game renders the world at 1920x1088 -- exactly 480x4 and 272x4, four times
+// the PSP resolution -- into a separate target, then draws the interface over it
+// in the same target. The entire binary has ONE RSSetViewports call (0x17E44),
+// inside a wrapper at 0x17DC0 that receives integer (x, y, w, h) arguments. Five
+// bytes in that wrapper (0x17DD3) are redirected.
 //
-// La forma del fotograma, medida en el proceso vivo:
+// Frame structure measured in the live process:
 //
-//     0x1C915  3440x1440                 <- inicio de fotograma
+//     0x1C915  3440x1440                 <- frame start
 //     0x1CA1A  3440x1440
-//     0x56345  1920x1088   x N           <- el mundo
-//     0x5CFB1  1920x1088   x1            <- la marca
-//     0x56345   256x256    x ~21         <- sombras, dependen de la escena
-//     0x56345  1920x1088   x M           <- el bloque 2D
-//     0x5C775  3440x1440                 <- fin de fotograma
+//     0x56345  1920x1088   x N           <- world
+//     0x5CFB1  1920x1088   x1            <- marker
+//     0x56345   256x256    x ~21         <- shadows, scene-dependent
+//     0x56345  1920x1088   x M           <- 2D block
+//     0x5C775  3440x1440                 <- frame end
 //
-//     gameplay     antes=741  sombras=21  2D=48
-//     menu         antes=  1  sombras=15  2D=118
-//     cinematica   antes=  1  sombras= 0  2D=4
+//     gameplay     before=741  shadows=21  2D=48
+//     menu         before=  1  shadows=15  2D=118
+//     cutscene     before= 1  shadows= 0  2D=4
 //
-// Cuando hay mundo, la SEGUNDA llamada del bloque 2D es la que lo compone, y
-// bandearla meteria el mundo en la banda: hay que empezar en la tercera. Cuando
-// no lo hay -- menus, cinematicas -- no hay nada que saltar, y empezar en la
-// tercera dejaba el video fuera de la banda, estirado. Por eso el punto de
-// arranque se decide por el numero de llamadas ANTERIORES a la marca, que se
-// conoce justo cuando la marca llega: sin heredar nada del fotograma anterior.
+// When a world is present, the SECOND call in the 2D block composites it, so
+// banding that call would put the world inside the band; processing must start
+// at the third call. When no world is present -- menus and cutscenes -- there is
+// nothing to skip, and starting at the third call leaves the video outside the
+// band and stretched. The starting point is therefore selected from the number
+// of calls BEFORE the marker, known when the marker arrives, without carrying
+// state over from the previous frame.
 //
-//     inicio de fotograma:  bandera = 0; antes = 0; despues = 0
-//     marca:                bandera = 1; despues = 0
-//                           desde = (antes > 64) ? 3 : 1
-//     ancho 256:            despues = 0        (las sombras reinician la cuenta:
-//                                               hay escenas con una llamada de
-//                                               1920 intercalada entre ellas que
-//                                               si no desplazaria la numeracion)
-//     ancho 1920:  sin bandera -> antes++
-//                  con bandera -> despues++;  banda si despues >= desde
+//     frame start: flag = 0; before = 0; after = 0
+//     marker:      flag = 1; after = 0
+//                  from = (before > 64) ? 3 : 1
+//     width 256:   after = 0       (shadows restart the count; some scenes have
+//                                   an interleaved 1920-wide call that would
+//                                   otherwise shift the numbering)
+//     width 1920:  without flag -> before++
+//                  with flag    -> after++; band if after >= from
 //
-// Solo usa rax, r10 y las banderas, que salva y restaura.
+// It only uses rax, r10, and flags, all of which it saves and restores.
 //
-// El codigo maquina vive aqui, aparte del modulo, para que las pruebas lo
-// comprueben byte a byte sin cargar el juego: un desplazamiento mal puesto no da
-// error de compilacion, corrompe la pila del proceso.
+// The machine code lives here, separate from the module, so tests can verify it
+// byte by byte without loading the game. A bad displacement does not produce a
+// compiler error; it corrupts the process stack.
 
 #ifndef PW_HUD_ISLAND_H
 #define PW_HUD_ISLAND_H
@@ -54,33 +54,33 @@ namespace pw {
 
 constexpr int kHudIslandSize = 256;
 
-// Estado del islote, en la misma pagina que el codigo y mas alla de su final.
-// Los operandos relativos a RIP que los alcanzan ya vienen resueltos en la
-// plantilla, porque son distancias internas y no dependen de donde caiga.
+// Island state, on the same page as the code and beyond its end. RIP-relative
+// operands that reach it are already resolved in the template because these are
+// internal distances that do not depend on where the island is allocated.
 constexpr int kHudFlagOffset    = 0x200;
 constexpr int kHudPreOffset     = 0x208;
 constexpr int kHudPostOffset    = 0x20c;
 constexpr int kHudFromOffset    = 0x210;
 
-// Lo unico que hay que rellenar en ejecucion.
-constexpr int kHudFrameStartOffset = 0x0b;  // imm64: direccion de 0x1C915
-constexpr int kHudMarkerOffset     = 0x3e;  // imm64: direccion de 0x5CFB1
-constexpr int kHudXOffset          = 0xe8;  // imm32 de `mov edx, X`
-constexpr int kHudWOffset          = 0xee;  // imm32 de `mov r9d, W`
-constexpr int kHudReturnOffset     = 0xfc;  // rel32 del salto de vuelta
-constexpr int kHudEndOffset        = 0xf2;  // destino comun de los saltos
+// Values that must be filled at runtime.
+constexpr int kHudFrameStartOffset = 0x0b;  // imm64: address of 0x1C915
+constexpr int kHudMarkerOffset     = 0x3e;  // imm64: address of 0x5CFB1
+constexpr int kHudXOffset          = 0xe8;  // imm32 for `mov edx, X`
+constexpr int kHudWOffset          = 0xee;  // imm32 for `mov r9d, W`
+constexpr int kHudReturnOffset     = 0xfc;  // return jump rel32
+constexpr int kHudEndOffset        = 0xf2;  // common branch target
 
-// Umbral que separa "hay mundo que componer" de "no lo hay". Medido: gameplay
-// 741 llamadas antes de la marca; menus y cinematicas, 1.
+// Threshold between "a world must be composited" and "no world is present".
+// Measured: gameplay has 741 calls before the marker; menus and cutscenes have 1.
 constexpr int kHudWorldThreshold = 64;
 
-// El objetivo interno al que se aplica el rectangulo. No es la resolucion de
-// salida: confundirlos da una banda del tamano equivocado.
+// Internal target to which the rectangle is applied. This is not the output
+// resolution; confusing the two produces a band with the wrong size.
 constexpr int kInternalWidth  = 1920;
 constexpr int kInternalHeight = 1088;
 
-// Rectangulo de la banda 16:9 dentro del objetivo interno, para una salida dada.
-// Devuelve false si la pantalla no es mas ancha que 16:9.
+// Centered 16:9 band inside the internal target for a given output resolution.
+// Returns false when the display is not wider than 16:9.
 inline bool hud_band(int output_width, int output_height, int* x, int* width) {
     if (output_width <= 0 || output_height <= 0) return false;
     const double k = (static_cast<double>(output_height) * 16.0 / 9.0) /

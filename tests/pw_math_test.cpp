@@ -1,7 +1,7 @@
-// Comprueba la aritmetica del parche contra los valores medidos en el proceso
-// vivo, y el codigo maquina de los dos islotes byte a byte. Esto ultimo importa
-// mas de lo que parece: un desplazamiento mal puesto no da un error de
-// compilacion, corrompe la pila del juego.
+// Check patch arithmetic against values measured in the live process, and
+// verify the machine code for both islands byte by byte. The latter matters
+// more than it may seem: a bad displacement does not cause a compiler error;
+// it corrupts the game stack.
 
 #include <cmath>
 #include <cstdint>
@@ -17,17 +17,17 @@ namespace {
 int g_failures = 0;
 
 void check(bool ok, const char* what) {
-    if (!ok) { std::printf("FALLO: %s\n", what); ++g_failures; }
+    if (!ok) { std::printf("FAIL: %s\n", what); ++g_failures; }
 }
 
 void check_close(float got, float want, float tol, const char* what) {
     if (std::fabs(got - want) > tol) {
-        std::printf("FALLO: %s  obtenido=%.6f esperado=%.6f\n", what, got, want);
+        std::printf("FAIL: %s  got=%.6f expected=%.6f\n", what, got, want);
         ++g_failures;
     }
 }
 
-// Hor+: se conserva el FOV vertical (m5) y solo se ensancha la horizontal.
+// Hor+: preserve vertical FOV (m5) and only widen the horizontal field.
 float corrected_m0(float m5, int width, int height) {
     return m5 / (static_cast<float>(width) / static_cast<float>(height));
 }
@@ -52,87 +52,87 @@ std::uint64_t read_u64(const unsigned char* p) {
 }  // namespace
 
 int main() {
-    // --- La proyeccion -------------------------------------------------------
-    // El frustum medido en el juego tiene el aspecto nativo de PSP, 480/272.
+    // --- Projection ----------------------------------------------------------
+    // The frustum measured in the game uses the native PSP aspect, 480/272.
     const float measured_m0 = 1.70000f;
     const float measured_m5 = 3.00000f;
     check_close(measured_m5 / measured_m0, 480.0f / 272.0f, 0.0005f,
-                "la matriz medida tiene el aspecto nativo de PSP");
+                "the measured matrix uses the native PSP aspect");
     check_close(corrected_m0(measured_m5, 3440, 1440), 1.255814f, 0.0001f,
                 "3440x1440 -> m0 = 1.255814");
-    check_close(measured_m5, 3.0f, 1e-6f, "m5 no se toca: eso es lo que lo hace Hor+");
+    check_close(measured_m5, 3.0f, 1e-6f, "m5 remains unchanged, making this Hor+");
     check_close(corrected_m0(measured_m5, 2560, 1080), 3.0f / (2560.0f / 1080.0f),
                 0.0001f, "2560x1080");
     check_close(corrected_m0(measured_m5, 5120, 1440), 3.0f / (5120.0f / 1440.0f),
                 0.0001f, "5120x1440 (32:9)");
-    check(!needs_correction(1920, 1080), "16:9 no necesita correccion");
-    check(!needs_correction(1920, 1200), "16:10 es mas estrecho que 16:9");
-    check(needs_correction(3440, 1440), "21:9 si la necesita");
-    check(needs_correction(3840, 1080), "32:9 si la necesita");
+    check(!needs_correction(1920, 1080), "16:9 needs no correction");
+    check(!needs_correction(1920, 1200), "16:10 is narrower than 16:9");
+    check(needs_correction(3440, 1440), "21:9 needs correction");
+    check(needs_correction(3840, 1080), "32:9 needs correction");
 
-    // --- El islote de la proyeccion -----------------------------------------
+    // --- Projection island ---------------------------------------------------
     {
         unsigned char island[pw::kProjectionIslandSize];
         pw::build_projection_island(island, 0x1410f4330ull, 3440.0f / 1440.0f);
 
         check(island[0] == 0x49 && island[1] == 0xba, "mov r10, imm64");
         check(read_u64(island + pw::kProjectionMatrixOffset) == 0x1410f4330ull,
-              "la direccion de la matriz va en el imm64");
+              "the matrix address is stored in the imm64");
         check(island[10] == 0x4c && island[11] == 0x39 && island[12] == 0xd0,
               "cmp rax, r10");
 
-        // El salto condicional tiene que caer exactamente en `add rsp,0x100`. Si
-        // cayera en medio de una instruccion, el juego se llevaria la pila por
-        // delante en cuanto construyera una matriz para otro destino.
-        check(island[13] == 0x75, "jne de un byte");
+        // The conditional jump must land exactly on `add rsp,0x100`. Landing in
+        // the middle of an instruction would corrupt the stack as soon as the
+        // game built a matrix for another destination.
+        check(island[13] == 0x75, "one-byte jne");
         check(15 + island[14] == pw::kProjectionEpilogueOffset,
-              "el jne salta justo al epilogo original");
+              "jne lands exactly on the original epilogue");
         check(island[pw::kProjectionEpilogueOffset] == 0x48 &&
                   island[pw::kProjectionEpilogueOffset + 1] == 0x81 &&
                   island[pw::kProjectionEpilogueOffset + 2] == 0xc4,
-              "en el destino del jne hay un add rsp");
+              "the jne target contains add rsp");
         check(island[pw::kProjectionIslandSize - 2] == 0x5d, "pop rbp");
         check(island[pw::kProjectionIslandSize - 1] == 0xc3, "ret");
 
-        // El inmediato es 1/aspecto: multiplicar por el equivale a dividir.
+        // The immediate is 1/aspect: multiplying by it is equivalent to division.
         check(island[20] == 0x41 && island[21] == 0xba, "mov r10d, imm32");
         float inverse = 0.0f;
         std::memcpy(&inverse, island + pw::kProjectionAspectOffset, sizeof(inverse));
-        check_close(inverse, 1440.0f / 3440.0f, 1e-7f, "el imm32 es 1/aspecto");
+        check_close(inverse, 1440.0f / 3440.0f, 1e-7f, "imm32 is 1/aspect");
         check_close(3.0f * inverse, corrected_m0(3.0f, 3440, 1440), 1e-6f,
-                    "multiplicar por el imm32 equivale a dividir por el aspecto");
+                    "multiplication by imm32 equals division by aspect");
 
-        // El comparador impide estropear las matrices de otras camaras.
+        // The comparison protects matrices used by other cameras.
         unsigned char other[pw::kProjectionIslandSize];
         pw::build_projection_island(other, 0x123456789ull, 3440.0f / 1440.0f);
         check(read_u64(other + pw::kProjectionMatrixOffset) == 0x123456789ull,
-              "el comparador usa la direccion dada");
+              "the comparison uses the supplied address");
     }
 
-    // --- La banda de la interfaz --------------------------------------------
+    // --- Interface band ------------------------------------------------------
     {
         int x = 0, w = 0;
-        check(pw::hud_band(3440, 1440, &x, &w), "21:9 tiene banda");
-        check(w == 1429, "3440x1440 -> ancho 1429");
+        check(pw::hud_band(3440, 1440, &x, &w), "21:9 has a band");
+        check(w == 1429, "3440x1440 -> width 1429");
         check(x == 245, "3440x1440 -> X 245");
-        check(x * 2 + w <= pw::kInternalWidth, "la banda cabe en el objetivo interno");
+        check(x * 2 + w <= pw::kInternalWidth, "the band fits the internal target");
 
-        // El aspecto que resulta de la banda es 16:9, que es lo que hay que
-        // reproducir: en vanilla el juego estira 480x272 a 16:9.
+        // The band produces a 16:9 aspect, which is the intended result: the
+        // unmodified game stretches 480x272 to 16:9.
         const double band_aspect =
             (static_cast<double>(w) / pw::kInternalWidth) * (3440.0 / 1440.0);
         check(std::fabs(band_aspect - 16.0 / 9.0) < 0.002,
-              "la banda reproduce el 16:9 de vanilla");
+              "the band reproduces the unmodified game's 16:9 output");
 
         int x2 = 0, w2 = 0;
-        check(pw::hud_band(3840, 1080, &x2, &w2), "32:9 tiene banda");
-        check(w2 < w, "cuanto mas ancha la pantalla, mas estrecha la banda");
-        check(!pw::hud_band(1920, 1080, &x2, &w2), "16:9 no necesita banda");
-        check(!pw::hud_band(1920, 1200, &x2, &w2), "16:10 tampoco");
-        check(!pw::hud_band(0, 0, &x2, &w2), "una resolucion invalida se rechaza");
+        check(pw::hud_band(3840, 1080, &x2, &w2), "32:9 has a band");
+        check(w2 < w, "wider displays produce a narrower band");
+        check(!pw::hud_band(1920, 1080, &x2, &w2), "16:9 needs no band");
+        check(!pw::hud_band(1920, 1200, &x2, &w2), "16:10 needs no band either");
+        check(!pw::hud_band(0, 0, &x2, &w2), "an invalid resolution is rejected");
     }
 
-    // --- El islote de la interfaz -------------------------------------------
+    // --- Interface island ----------------------------------------------------
     {
         const std::uint64_t island = 0x141000000ull;
         const std::uint64_t frame_start = 0x14001c915ull;
@@ -143,30 +143,30 @@ int main() {
 
         check(code[0] == 0x50 && code[1] == 0x41 && code[2] == 0x52 &&
                   code[3] == 0x9c,
-              "salva rax, r10 y las banderas");
+              "saves rax, r10, and flags");
         check(code[4] == 0x48 && code[5] == 0x8b && code[6] == 0x44 &&
                   code[7] == 0x24 && code[8] == 0x60,
-              "lee la direccion de retorno en [rsp+0x60]");
+              "reads the return address from [rsp+0x60]");
         check(read_u64(code + pw::kHudFrameStartOffset) == frame_start,
-              "el inicio de fotograma va en su imm64");
+              "frame start is stored in its imm64");
         check(read_u64(code + pw::kHudMarkerOffset) == marker,
-              "la marca va en su imm64");
-        check(read_i32(code + pw::kHudXOffset) == 245, "X va en su imm32");
-        check(read_i32(code + pw::kHudWOffset) == 1429, "el ancho va en su imm32");
-        check(code[pw::kHudXOffset - 1] == 0xba, "X es el operando de mov edx");
+              "marker is stored in its imm64");
+        check(read_i32(code + pw::kHudXOffset) == 245, "X is stored in its imm32");
+        check(read_i32(code + pw::kHudWOffset) == 1429, "width is stored in its imm32");
+        check(code[pw::kHudXOffset - 1] == 0xba, "X is the mov edx operand");
         check(code[pw::kHudWOffset - 2] == 0x41 && code[pw::kHudWOffset - 1] == 0xb9,
-              "el ancho es el operando de mov r9d");
+              "width is the mov r9d operand");
 
-        // El destino comun de los saltos tiene que ser el popfq que restaura el
-        // estado. Si alguno cayera en medio de una instruccion, el juego se cae.
-        check(code[pw::kHudEndOffset] == 0x9d, "el destino comun es el popfq");
+        // The common branch target must be the popfq that restores state. If any
+        // branch landed in the middle of an instruction, the game would crash.
+        check(code[pw::kHudEndOffset] == 0x9d, "the common target is popfq");
         check(code[pw::kHudEndOffset + 1] == 0x41 &&
                   code[pw::kHudEndOffset + 2] == 0x5a && code[pw::kHudEndOffset + 3] == 0x58,
-              "pop r10 y pop rax");
+              "pop r10 and pop rax");
 
-        // Todos los saltos son de 32 bits porque el islote pasa de 127 bytes.
-        // Se recorren y se comprueba que ninguno se sale del islote y que los
-        // que van al final caen exactamente en el destino comun.
+        // All branches are 32-bit because the island exceeds 127 bytes. Walk
+        // through them and verify that none leaves the island and that branches
+        // to the end land exactly on the common target.
         int checked_branches = 0;
         for (int i = 0; i + 6 <= pw::kHudIslandSize; ++i) {
             const bool near_conditional = code[i] == 0x0f && (code[i + 1] & 0xf0) == 0x80;
@@ -174,47 +174,47 @@ int main() {
             if (!near_conditional && !near_jump) continue;
             const int length = near_conditional ? 6 : 5;
             const int target = i + length + read_i32(code + i + length - 4);
-            if (i + length == pw::kHudReturnOffset + 4) continue;  // el de vuelta
+            if (i + length == pw::kHudReturnOffset + 4) continue;  // return jump
             if (target < 0 || target > pw::kHudIslandSize) {
-                std::printf("FALLO: el salto en 0x%02x se sale del islote (0x%x)\n",
+                std::printf("FAIL: branch at 0x%02x leaves the island (0x%x)\n",
                             i, target);
                 ++g_failures;
             }
             ++checked_branches;
             i += length - 1;
         }
-        check(checked_branches >= 8, "se han comprobado todos los saltos");
+        check(checked_branches >= 8, "all branches were checked");
 
-        // Las cuatro casillas de estado viven mas alla del codigo y no se pisan.
-        check(pw::kHudFlagOffset >= pw::kHudIslandSize, "la bandera no pisa el codigo");
-        check(pw::kHudPreOffset >= pw::kHudIslandSize, "el contador de antes tampoco");
-        check(pw::kHudPostOffset == pw::kHudPreOffset + 4, "antes y despues son contiguos");
-        check(pw::kHudFromOffset % 4 == 0, "el punto de arranque esta alineado");
+        // All four state slots live beyond the code and do not overlap it.
+        check(pw::kHudFlagOffset >= pw::kHudIslandSize, "the flag does not overlap code");
+        check(pw::kHudPreOffset >= pw::kHudIslandSize, "the before counter does not overlap code");
+        check(pw::kHudPostOffset == pw::kHudPreOffset + 4, "before and after are contiguous");
+        check(pw::kHudFromOffset % 4 == 0, "the starting point is aligned");
 
-        // El salto de vuelta apunta a la instruccion siguiente del juego.
-        check(code[pw::kHudReturnOffset - 1] == 0xe9, "vuelve con un salto relativo");
+        // The return jump points to the game's next instruction.
+        check(code[pw::kHudReturnOffset - 1] == 0xe9, "returns with a relative jump");
         check(island + pw::kHudReturnOffset + 4 +
                       read_i32(code + pw::kHudReturnOffset) == back,
-              "el salto de vuelta apunta al sitio correcto");
+              "the return jump points to the correct address");
 
-        // Las dos instrucciones originales que el desvio sustituye se reejecutan
-        // aqui antes de volver.
+        // Re-execute the two original instructions replaced by the detour before
+        // returning.
         check(code[pw::kHudEndOffset + 4] == 0x0f && code[pw::kHudEndOffset + 5] == 0x57 &&
                   code[pw::kHudEndOffset + 6] == 0xc0,
-              "reejecuta el xorps original");
+              "re-executes the original xorps");
         check(code[pw::kHudEndOffset + 7] == 0x8b && code[pw::kHudEndOffset + 8] == 0xc2,
-              "reejecuta el mov eax,edx original");
+              "re-executes the original mov eax,edx");
 
-        // El umbral que separa "hay mundo" de "no lo hay" aparece tal cual en el
-        // codigo, como operando del cmp contra el contador de antes.
+        // The threshold separating "world present" from "no world" appears in
+        // the code as the cmp operand against the before counter.
         bool threshold_found = false;
         for (int i = 0; i + 10 <= pw::kHudIslandSize; ++i)
             if (code[i] == 0x81 && code[i + 1] == 0x3d &&
                 read_i32(code + i + 6) == pw::kHudWorldThreshold)
                 threshold_found = true;
-        check(threshold_found, "el umbral de 64 esta en el codigo");
+        check(threshold_found, "the threshold of 64 is present in the code");
 
-        // Y los dos puntos de arranque posibles: 3 con mundo, 1 sin el.
+        // Verify both possible starting points: 3 with a world, 1 without one.
         bool from_three = false, from_one = false;
         for (int i = 0; i + 10 <= pw::kHudIslandSize; ++i) {
             if (code[i] != 0xc7 || code[i + 1] != 0x05) continue;
@@ -222,11 +222,11 @@ int main() {
             if (read_i32(code + i + 6) == 3) from_three = true;
             if (read_i32(code + i + 6) == 1) from_one = true;
         }
-        check(from_three, "con mundo, arranca en la tercera llamada");
-        check(from_one, "sin mundo, arranca en la primera");
+        check(from_three, "with a world, processing starts on the third call");
+        check(from_one, "without a world, processing starts on the first call");
 
-        // Cambiar el rectangulo no puede tocar ni una instruccion: las unicas
-        // diferencias tienen que caer dentro de los dos inmediatos.
+        // Changing the rectangle cannot affect an instruction; all differences
+        // must be confined to the two immediate operands.
         unsigned char other[pw::kHudIslandSize];
         pw::build_hud_island(other, island, frame_start, marker, back, 100, 800);
         bool outside_immediates = false;
@@ -237,22 +237,22 @@ int main() {
             if (!in_x && !in_w) outside_immediates = true;
         }
         check(!outside_immediates,
-              "cambiar el rectangulo solo toca los dos inmediatos");
+              "changing the rectangle only alters the two immediates");
         check(read_i32(other + pw::kHudXOffset) == 100 &&
                   read_i32(other + pw::kHudWOffset) == 800,
-              "y los deja con los valores nuevos");
+              "and stores the new values in them");
     }
 
-    // --- La tabla de resoluciones -------------------------------------------
+    // --- Resolution table ----------------------------------------------------
     {
         const int table[4][2] = {{1280, 720}, {1920, 1080}, {2560, 1440}, {3840, 2160}};
         int slot = -1;
         for (int i = 0; i < 4; ++i) if (table[i][1] == 1440) slot = i;
-        check(slot == 2, "un panel de 1440 usa la entrada [2]");
+        check(slot == 2, "a 1440-line display uses entry [2]");
         check(pw::kInternalWidth == 480 * 4 && pw::kInternalHeight == 272 * 4,
-              "el objetivo interno es cuatro veces la resolucion de PSP");
+              "the internal target is four times the PSP resolution");
     }
 
-    if (g_failures == 0) std::printf("todas las comprobaciones pasan\n");
+    if (g_failures == 0) std::printf("all checks passed\n");
     return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
