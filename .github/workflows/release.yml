@@ -1,0 +1,36 @@
+name: Publish release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DPWUWFIX_RELEASE=${{ github.ref_name }}"
+      - run: cmake --build build
+      - run: ctest --test-dir build --output-on-failure
+      - name: Installer smoke test
+        shell: pwsh
+        run: ./tests/windows_package_smoke.ps1 -Dll ./build/bin/winmm.dll -Launcher ./build/bin/launcher.exe -LauncherProbe ./build/bin/pw_launcher_args_probe.exe
+      - run: python scripts/package_release.py --dll build/bin/winmm.dll --launcher build/bin/launcher.exe
+      - name: Publish as Latest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${GITHUB_REF_NAME}" dist/*
+          --title "Peace Walker UltraWide Fix ${GITHUB_REF_NAME} — Public candidate"
+          --notes-file "docs/RELEASE_NOTES_v0.1.0-rc.1.md"
+          --latest

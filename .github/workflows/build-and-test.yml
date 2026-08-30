@@ -1,0 +1,63 @@
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
+      - name: Installer smoke test
+        shell: pwsh
+        run: ./tests/windows_package_smoke.ps1 -Dll ./build/bin/winmm.dll -Launcher ./build/bin/launcher.exe -LauncherProbe ./build/bin/pw_launcher_args_probe.exe
+      - name: Package and audit
+        run: python scripts/package_release.py --dll build/bin/winmm.dll --launcher build/bin/launcher.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-packages
+          path: dist/*
+
+  linux-cross-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install -y ninja-build mingw-w64 g++
+      - name: Cross-build Windows payloads
+        run: >-
+          cmake -S . -B build-mingw -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64-x86_64.cmake
+          -DBUILD_TESTING=OFF
+      - run: cmake --build build-mingw
+      - name: Run portable math tests natively
+        run: g++ -std=c++17 -Isrc tests/pw_math_test.cpp -o /tmp/pw_math_test && /tmp/pw_math_test
+      - name: Linux package smoke test
+        run: |
+          mkdir -p bin
+          cp build-mingw/bin/winmm.dll bin/winmm.dll
+          cp build-mingw/bin/launcher.exe bin/launcher.exe
+          chmod +x PeaceWalkerUltraWideFix-Linux-*.sh scripts/linux/*.sh scripts/linux/*.py tests/linux_package_smoke.sh
+          ./tests/linux_package_smoke.sh
