@@ -7,9 +7,9 @@ The signature resolver is designed for a common minor-update pattern: the game k
 For an executable whose PE identity is not listed, the patch requires all of the following before accepting the candidate:
 
 - one exact resolution-table match in `.rdata`;
-- one unique match for each of the five long code locators in decrypted `.text`;
+- one unique match for each of the six long code locators in decrypted `.text`;
 - both frame call sites targeting the resolved viewport wrapper;
-- the known store-to-epilogue and hook-to-return distances;
+- the known projection store-to-epilogue and hook-to-return distances;
 - a display context and derived projection matrix contained in `.data`.
 
 If any condition fails, the affected hooks are not installed and the log states that compatibility was rejected.
@@ -19,6 +19,7 @@ If any condition fails, the affected hooks are not installed and the log states 
 Signatures do not make the patch independent of the game implementation. Automatic compatibility is not accepted when an update:
 
 - changes the projection or viewport logic;
+- changes how the camera's CPU-side visibility planes are constructed;
 - recompiles the relevant functions into a different instruction structure;
 - creates zero or multiple matches for a locator;
 - separates the projection matrix from the validated data block;
@@ -33,7 +34,7 @@ Those cases require new analysis and an in-game acceptance pass. Keeping the old
 3. Build with `-DPWUWFIX_FORCE_SIGNATURE_FALLBACK=ON` to exercise the candidate path even if the executable later receives an exact profile.
 4. Run `pw_signature_test` against a locally obtained unpacked image. Each locator must report exactly one match, and both call relationships must pass.
 5. Start the game and confirm the log reports `Signature compatibility accepted` before checking visuals.
-6. Validate at minimum: title/menu, gameplay FOV, gameplay HUD, pause/map, Codec, mission briefing, a real-time cinematic, a prerecorded video and a long loading screen.
+6. Validate at minimum: title/menu, gameplay FOV, lateral world visibility while rotating the camera, gameplay HUD, pause/map, Codec, mission briefing, a real-time cinematic, a prerecorded video and a long loading screen.
 7. Add an exact profile only after the signature result and the visual acceptance pass agree.
 8. Build Windows and MinGW payloads, run package smoke tests, inspect archive contents and verify SHA-256 files before publishing.
 

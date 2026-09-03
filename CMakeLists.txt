@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 project(PeaceWalkerUltraWideFix VERSION 0.1.0 LANGUAGES C CXX)
 
-set(PWUWFIX_RELEASE "v0.1.0-rc.3" CACHE STRING "Public release label")
+set(PWUWFIX_RELEASE "v0.1.0-rc.4" CACHE STRING "Public release label")
 option(PWUWFIX_FORCE_SIGNATURE_FALLBACK
     "Maintainer-only: ignore known PE identities to exercise signature resolution" OFF)
 

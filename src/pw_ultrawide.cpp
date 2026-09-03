@@ -6,11 +6,11 @@
 //
 //   1. A resolution table in .rdata defines the composited size. Replacing one
 //      entry with the real output width removes the bars.
-//   2. The projection matrix is static global data, and the port never adjusts
-//      its aspect ratio. Expanding the output without changing it merely
-//      stretches the image. The correction happens INSIDE the function that
-//      builds the matrix, rather than from a thread, because the game rebuilds
-//      it once per frame and racing that writer causes flicker.
+//   2. The projection matrix and the camera's horizontal visibility planes
+//      both retain the original PSP aspect. The projection correction happens
+//      INSIDE the matrix builder, while a second source hook widens only the
+//      left/right visibility planes. Keeping those two consumers consistent
+//      prevents geometry at ultrawide edges from being rejected.
 //   3. The 2D interface is drawn into the same internal target as the world. To
 //      keep it at 16:9 while the world fills the display, its viewport changes
 //      from the call where 2D rendering begins. That call is selected per frame
@@ -33,6 +33,7 @@
 #include <limits>
 
 #include "pw_hud_island.h"
+#include "pw_frustum_island.h"
 #include "pw_patch_targets.h"
 #include "pw_projection_island.h"
 
@@ -58,15 +59,16 @@ struct ExecutableProfile {
     std::uintptr_t frame_marker;
     std::uintptr_t frame_start;
     std::uintptr_t display_context;
+    std::uintptr_t frustum_hook;
 };
 
 constexpr ExecutableProfile kProfiles[] = {
     {"Steam build before 25052315", 0x6a6cc50e, 0x0199e000,
      0xd8f1b8, 0x10f4330, 0x11a4b4, 0x11a49d, 0x17dd3, 0x17dd8,
-     0x5cfb1, 0x1c915, 0x15929d8},
+     0x5cfb1, 0x1c915, 0x15929d8, 0x8ed5a},
     {"Steam build 25052315", 0x6a964726, 0x019a2000,
      0xd8f1c8, 0x10f8330, 0x11a604, 0x11a5ed, 0x17dd3, 0x17dd8,
-     0x5d021, 0x1c915, 0x15969d8},
+     0x5d021, 0x1c915, 0x15969d8, 0x8eeaa},
 };
 
 const ExecutableProfile* g_profile;
@@ -81,6 +83,7 @@ struct PatchTargets {
     std::uintptr_t frame_marker;
     std::uintptr_t frame_start;
     std::uintptr_t display_context;
+    std::uintptr_t frustum_hook;
 };
 
 PatchTargets g_targets{};
@@ -101,6 +104,8 @@ constexpr std::uintptr_t kProjM11 = 0x2c, kProjM15 = 0x3c;
 // Both are validated before patching.
 constexpr std::size_t kProjEpilogueSize = 9;
 constexpr std::size_t kViewportHookSize = 5;
+constexpr std::size_t kFrustumHookSize = 5;
+constexpr std::size_t kFrustumDisplacedSize = 39;
 constexpr std::uintptr_t kViewportHookFromFunction = 0x13;
 
 // Display context. +0x2970 is the table index.
@@ -115,6 +120,7 @@ bool g_fix_table = true;
 bool g_fix_projection = true;
 bool g_fix_hud = true;
 bool g_projection_hooked;
+bool g_frustum_hooked;
 std::atomic<std::uintptr_t> g_display_context_address{};
 
 bool projection_looks_valid(const float* matrix);
@@ -224,7 +230,8 @@ bool targets_match_profile(const PatchTargets& targets) {
         targets.viewport_return == g_profile->viewport_return &&
         targets.frame_marker == g_profile->frame_marker &&
         targets.frame_start == g_profile->frame_start &&
-        targets.display_context == g_profile->display_context;
+        targets.display_context == g_profile->display_context &&
+        targets.frustum_hook == g_profile->frustum_hook;
 }
 
 bool resolve_code_targets() {
@@ -242,11 +249,14 @@ bool resolve_code_targets() {
         text, pw::targets::kFrameMarker);
     const auto display = pw::signature::find_unique(
         text, pw::targets::kDisplayContext);
+    const auto frustum = pw::signature::find_unique(
+        text, pw::targets::kFrustumSeed);
     if (projection.state != pw::signature::MatchState::unique ||
         viewport.state != pw::signature::MatchState::unique ||
         frame_start.state != pw::signature::MatchState::unique ||
         frame_marker.state != pw::signature::MatchState::unique ||
-        display.state != pw::signature::MatchState::unique) {
+        display.state != pw::signature::MatchState::unique ||
+        frustum.state != pw::signature::MatchState::unique) {
         return false;
     }
 
@@ -296,6 +306,8 @@ bool resolve_code_targets() {
     resolved.frame_marker = to_rva(
         frame_marker.address + pw::targets::kFrameMarkerReturnOffset);
     resolved.display_context = to_rva(display_context);
+    resolved.frustum_hook = to_rva(
+        frustum.address + pw::targets::kFrustumHookOffset);
 
     if (resolved.projection_epilogue - resolved.projection_store != 0x17 ||
         resolved.viewport_return - resolved.viewport_hook !=
@@ -406,6 +418,7 @@ bool wait_for_code(unsigned timeout_ms) {
     report("frame start", pw::targets::kFrameStart);
     report("frame marker", pw::targets::kFrameMarker);
     report("display context", pw::targets::kDisplayContext);
+    report("visibility frustum", pw::targets::kFrustumSeed);
     log_line("Signature diagnostic: a unique-looking set can still be rejected "
              "when a call target, data range, matrix shape or known-profile "
              "comparison is inconsistent.");
@@ -466,6 +479,30 @@ bool install_projection_hook(float aspect) {
     }
     log_line("Projection corrected at its source (0x%llx).",
              static_cast<unsigned long long>(g_targets.projection_epilogue));
+    return true;
+}
+
+bool install_frustum_hook(float aspect) {
+    const auto site = g_base + g_targets.frustum_hook;
+    void* island = allocate_island_near(site);
+    if (!island) {
+        log_line("Visibility: unable to allocate a code island.");
+        return false;
+    }
+    unsigned char code[pw::kFrustumIslandSize];
+    pw::build_frustum_island(
+        code, reinterpret_cast<std::uint64_t>(island),
+        static_cast<std::uint64_t>(site + kFrustumDisplacedSize), aspect);
+    std::memcpy(island, code, sizeof(code));
+    if (!write_jump(site, kFrustumHookSize, island)) {
+        VirtualFree(island, 0, MEM_RELEASE);
+        log_line("Visibility: unable to write the detour jump.");
+        return false;
+    }
+    log_line("Horizontal visibility corrected at 0x%llx "
+             "(height/width=%.6f).",
+             static_cast<unsigned long long>(g_targets.frustum_hook),
+             1.0f / aspect);
     return true;
 }
 
@@ -584,10 +621,11 @@ DWORD WINAPI initialize(LPVOID) {
         return 0;
     }
 
-    const float aspect = static_cast<float>(g_width) / static_cast<float>(g_height);
+    const float output_aspect = static_cast<float>(g_width) /
+                                static_cast<float>(g_height);
     log_line("Output %dx%d (aspect %.5f). Native 16:9 = 1.77778.", g_width, g_height,
-             aspect);
-    if (aspect <= 16.0f / 9.0f + 0.001f) {
+             output_aspect);
+    if (output_aspect <= 16.0f / 9.0f + 0.001f) {
         log_line("The display is not wider than 16:9; no correction is needed.");
         return 0;
     }
@@ -608,30 +646,37 @@ DWORD WINAPI initialize(LPVOID) {
         return 0;
     }
     if (g_signature_fallback) {
-        log_line("Signature compatibility accepted: all five code locators were "
+        log_line("Signature compatibility accepted: all code locators were "
                  "unique and their call/data-flow relationships were valid.");
     } else {
         log_line("Known profile independently confirmed by complete signatures.");
     }
     log_line("Resolved RVAs: table=0x%llx, projection=0x%llx, "
              "projection-store=0x%llx, viewport=0x%llx, frame-start=0x%llx, "
-             "frame-marker=0x%llx, display-context=0x%llx.",
+             "frame-marker=0x%llx, display-context=0x%llx, frustum=0x%llx.",
              static_cast<unsigned long long>(g_targets.resolution_table),
              static_cast<unsigned long long>(g_targets.projection),
              static_cast<unsigned long long>(g_targets.projection_store),
              static_cast<unsigned long long>(g_targets.viewport_hook),
              static_cast<unsigned long long>(g_targets.frame_start),
              static_cast<unsigned long long>(g_targets.frame_marker),
-             static_cast<unsigned long long>(g_targets.display_context));
+             static_cast<unsigned long long>(g_targets.display_context),
+             static_cast<unsigned long long>(g_targets.frustum_hook));
 
     if (g_fix_projection) {
-        g_projection_hooked = install_projection_hook(aspect);
-        if (!g_projection_hooked) {
-            log_line("WARNING: without the hook, the projection is maintained by "
-                     "a thread and will flicker.");
-            const HANDLE thread = CreateThread(
-                nullptr, 0, maintain_projection, nullptr, 0, nullptr);
-            if (thread) CloseHandle(thread);
+        g_frustum_hooked = install_frustum_hook(output_aspect);
+        if (!g_frustum_hooked) {
+            log_line("ERROR: CorrectFOV was not applied because the matching "
+                     "visibility correction could not be installed.");
+        } else {
+            g_projection_hooked = install_projection_hook(output_aspect);
+            if (!g_projection_hooked) {
+                log_line("WARNING: without the source hook, the projection is "
+                         "maintained by a thread and may flicker.");
+                const HANDLE thread = CreateThread(
+                    nullptr, 0, maintain_projection, nullptr, 0, nullptr);
+                if (thread) CloseHandle(thread);
+            }
         }
     }
 

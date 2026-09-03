@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include "pw_hud_island.h"
+#include "pw_frustum_island.h"
 #include "pw_projection_island.h"
 
 namespace {
@@ -130,6 +131,37 @@ int main() {
         check(!pw::hud_band(1920, 1080, &x2, &w2), "16:9 needs no band");
         check(!pw::hud_band(1920, 1200, &x2, &w2), "16:10 needs no band either");
         check(!pw::hud_band(0, 0, &x2, &w2), "an invalid resolution is rejected");
+    }
+
+    // --- Visibility-frustum island ------------------------------------------
+    {
+        const std::uint64_t island_address = 0x142000000ull;
+        const std::uint64_t return_address = 0x14008eed1ull;
+        unsigned char island[pw::kFrustumIslandSize];
+        pw::build_frustum_island(island, island_address, return_address,
+                                 5120.0f / 1440.0f);
+
+        check(island[0] == 0x9c && island[81] == 0x9d,
+              "frustum island preserves flags");
+        check(island[10] == 0x0f && island[13] == 0xf3 &&
+                  island[21] == 0xf3,
+              "frustum island derives horizontal scale from live m5");
+        check(island_address + 29 + read_i32(island + 25) ==
+                  island_address + pw::kFrustumAspectOffset,
+              "frustum island reads its embedded inverse aspect");
+        check(island[29] == 0xf3 && island[33] == 0x10 &&
+                  island[62] == 0xf3 && island[66] == 0x20,
+              "frustum island replaces only the horizontal plane seeds");
+        float inverse = 0.0f;
+        std::memcpy(&inverse, island + pw::kFrustumAspectOffset,
+                    sizeof(inverse));
+        check_close(inverse, 1440.0f / 5120.0f, 1e-7f,
+                    "frustum island stores height/output-width");
+        check(island[82] == 0xe9, "frustum island returns with a rel32 jump");
+        check(island_address + pw::kFrustumReturnDisplacementOffset + 4 +
+                  read_i32(island + pw::kFrustumReturnDisplacementOffset) ==
+                  return_address,
+              "frustum island returns after the displaced instruction");
     }
 
     // --- Interface island ----------------------------------------------------

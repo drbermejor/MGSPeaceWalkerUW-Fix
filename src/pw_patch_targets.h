@@ -37,6 +37,18 @@ inline constexpr std::uint8_t kViewportHookBytes[] = {
     0x24, 0x70,
 };
 
+// Six visibility planes are created immediately after the projection builder
+// returns. This sequence contains the camera height/width load used by those
+// planes. It is identical and unique in both maintained executables.
+inline constexpr std::uint8_t kFrustumSeedBytes[] = {
+    0x48, 0x8d, 0x77, 0x08, 0x33, 0xc0, 0xf3, 0x0f,
+    0x11, 0x47, 0x10, 0x0f, 0x28, 0xc8, 0xf3, 0x0f,
+    0x11, 0x47, 0x34, 0xf3, 0x0f, 0x10, 0x83, 0x50,
+    0x02, 0x00, 0x00, 0x41, 0x0f, 0x57, 0xcb, 0x41,
+    0x0f, 0x57, 0xc3, 0xf3, 0x0f, 0x11, 0x4f, 0x20,
+    0xf3, 0x0f, 0x11, 0x47, 0x38,
+};
+
 inline constexpr std::uint8_t kFrameStartBytes[] = {
     0x48, 0x8b, 0xc8, 0x44, 0x8b, 0xc8, 0x48, 0xc1,
     0xe9, 0x20, 0x89, 0x4c, 0x24, 0x20, 0xe8, 0x00,
@@ -88,6 +100,8 @@ inline constexpr signature::BytePattern kProjectionTail{
     kProjectionTailBytes, nullptr, sizeof(kProjectionTailBytes)};
 inline constexpr signature::BytePattern kViewportHook{
     kViewportHookBytes, nullptr, sizeof(kViewportHookBytes)};
+inline constexpr signature::BytePattern kFrustumSeed{
+    kFrustumSeedBytes, nullptr, sizeof(kFrustumSeedBytes)};
 inline constexpr signature::BytePattern kFrameStart{
     kFrameStartBytes, kFrameStartMask, sizeof(kFrameStartBytes)};
 inline constexpr signature::BytePattern kFrameMarker{
@@ -98,6 +112,7 @@ inline constexpr signature::BytePattern kDisplayContext{
 // Addresses derived from the start of each unique signature.
 inline constexpr std::size_t kProjectionStoreOffset = 0x10;
 inline constexpr std::size_t kProjectionEpilogueOffset = 0x27;
+inline constexpr std::size_t kFrustumHookOffset = 0x06;
 inline constexpr std::size_t kFrameStartCallOffset = 0x0e;
 inline constexpr std::size_t kFrameStartReturnOffset = 0x13;
 inline constexpr std::size_t kFrameMarkerCallOffset = 0x1b;

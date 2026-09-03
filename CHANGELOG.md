@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## v0.1.0-rc.4 — 2026-09-03
+
+- Corrects the CPU-side horizontal visibility boundary together with the Hor+
+  projection so ultrawide-edge terrain is no longer rejected by the original
+  16:9 planes.
+- Derives the left/right plane coefficient from the live vertical projection
+  scale and output aspect while preserving the original top/bottom planes.
+- Locates the visibility-plane builder with a long unique signature in both
+  maintained Steam executables and requires it as part of fail-closed
+  compatibility detection.
+- Installs visibility before projection and leaves `CorrectFOV` unapplied if
+  the matching visibility correction cannot be installed.
+- Adds deterministic code-island and signature tests plus fixed-camera visual
+  evidence at 3440x1440.
+- Documents the distinction between physical 3440x1440 validation, simulated
+  5120x1440 angular coverage and the remaining physical 5120x1440 acceptance
+  check.
+
 - Windows setup now ignores stale Steam-library entries whose drives are no
   longer mounted, then continues searching the remaining libraries.
 - Adds a regression test covering an unavailable drive followed by a valid

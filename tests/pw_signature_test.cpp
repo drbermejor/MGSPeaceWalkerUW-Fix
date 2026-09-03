@@ -93,7 +93,9 @@ bool audit_unpacked_image(const char* path) {
         text_region, pw::targets::kFrameMarker);
     const auto display = pw::signature::find_unique(
         text_region, pw::targets::kDisplayContext);
-    const std::array<std::pair<const char*, pw::signature::MatchResult>, 6>
+    const auto frustum = pw::signature::find_unique(
+        text_region, pw::targets::kFrustumSeed);
+    const std::array<std::pair<const char*, pw::signature::MatchResult>, 7>
         results{{
             {"resolution table", table},
             {"projection tail", projection},
@@ -101,6 +103,7 @@ bool audit_unpacked_image(const char* path) {
             {"frame start", frame_start},
             {"frame marker", frame_marker},
             {"display context", display},
+            {"visibility frustum", frustum},
         }};
     bool valid = true;
     for (const auto& entry : results) {

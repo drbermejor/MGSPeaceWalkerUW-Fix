@@ -81,6 +81,8 @@ BypassUnityLauncher=0
 
 `Width=0` and `Height=0` use the physical primary display. Set both explicitly if automatic detection is unsuitable under Proton.
 
+`CorrectFOV=1` keeps vertical FOV, expands the horizontal view and widens the matching CPU-side visibility boundary. The two source hooks are treated as one correction so visible ultrawide geometry is not rejected by the original 16:9 planes.
+
 `CenterHUD=1` keeps most 2D presentation in a centered 16:9 canvas. `CenterHUD=0` leaves the interface at full output width while retaining the corrected ultrawide 3D view.
 
 The launcher bypass reproduces the official Peace Walker launch protocol and starts the game as Steam's child process. It is off by default and can be toggled at any time; the original Unity launcher is backed up and restored conditionally.
@@ -94,13 +96,13 @@ The public default for the bypass is English. Other supported game tokens (`sp`,
 - The game still renders its 3D world internally at its original high-resolution target (1920×1088) before composing it to the selected output. This fix changes aspect and composition, not internal asset quality.
 - Mouse-camera latency is present in the original port even with this patch disabled. It is not introduced by the ultrawide or HUD correction.
 - The patch has exact profiles for the tested Steam Master Collection builds from before and after Steam build 25052315. An unknown executable is accepted only when every signature and structural relationship resolves consistently; otherwise the hooks fail safely.
-- 3440×1440 is the primary visually verified ultrawide mode. The calculations are resolution-independent, but 32:9 and additional modes need broader public testing.
+- 3440×1440 is the primary visually verified ultrawide mode. The 32:9 horizontal-visibility path has been reproduced with a live aspect simulation, but physical 5120×1440 and additional modes still need broader public testing.
 
 ## Game-update compatibility
 
 Known Steam builds use exact PE profiles and independently verify every code target. If a future update only moves otherwise unchanged code and data, the patch can recover the targets from complete signatures in memory. Every locator must be unique, both viewport call sites must resolve to the same wrapper, and the derived data addresses must stay inside the expected PE sections. Missing, ambiguous or inconsistent results are rejected.
 
-This improves resilience to address-only updates; it is not a promise that arbitrary engine changes will remain compatible. A change in behavior, instruction structure or data layout still requires analysis and in-game validation. See [Update compatibility](docs/UPDATE_COMPATIBILITY.md) for the exact boundary.
+This improves resilience to address-only updates; it is not a promise that arbitrary engine changes will remain compatible. A change in behavior, instruction structure or data layout still requires analysis and in-game validation. See [Update compatibility](docs/UPDATE_COMPATIBILITY.md) for the exact boundary and [Horizontal visibility correction](docs/HORIZONTAL_VISIBILITY.md) for the culling diagnosis and formula.
 
 ![Centered gameplay HUD](docs/images/gameplay-centered-hud.jpg)
 
