@@ -31,6 +31,8 @@ jobs:
         run: ./tests/windows_package_smoke.ps1 -Dll ./build/bin/winmm.dll -Launcher ./build/bin/launcher.exe -LauncherProbe ./build/bin/pw_launcher_args_probe.exe
       - name: Package and audit
         run: python scripts/package_release.py --dll build/bin/winmm.dll --launcher build/bin/launcher.exe
+      - name: Release package tests
+        run: python tests/release_package_test.py --dist dist --dll build/bin/winmm.dll
 
   linux-cross-build:
     runs-on: ubuntu-24.04
@@ -57,3 +59,7 @@ jobs:
           cp build-mingw/bin/launcher.exe bin/launcher.exe
           chmod +x PeaceWalkerUltraWideFix-Linux-*.sh scripts/linux/*.sh scripts/linux/*.py tests/linux_package_smoke.sh
           ./tests/linux_package_smoke.sh
+      - name: Release package tests
+        run: |
+          python3 scripts/package_release.py --dll build-mingw/bin/winmm.dll --launcher build-mingw/bin/launcher.exe
+          python3 tests/release_package_test.py --dist dist --dll build-mingw/bin/winmm.dll

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## v0.1.0-rc.5 — 2026-09-03
+
+- Adds dedicated script-free manual ZIPs for Windows and Linux/Proton.
+- Places `winmm.dll`, `PeaceWalkerUltraWideFix.ini` and a short platform-specific
+  `INSTALL.txt` at the root of each manual archive for direct installation.
+- Documents safe backup, configuration and removal steps for manual installs.
+- Normalizes every shell and Python script in the guided Linux archive to LF
+  endings, fixing `/usr/bin/env: 'bash\r': No such file or directory` in packages
+  produced by the Windows release runner.
+- Audits Linux script line endings and executable modes, manual archive layouts
+  and payload identity before publication.
+- Does not change the runtime ultrawide, visibility or centered-interface behavior
+  introduced in rc.4.
+
 ## v0.1.0-rc.4 — 2026-09-03
 
 - Corrects the CPU-side horizontal visibility boundary together with the Hor+

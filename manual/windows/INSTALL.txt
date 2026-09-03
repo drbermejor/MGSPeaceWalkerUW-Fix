@@ -1,0 +1,35 @@
+PEACE WALKER ULTRAWIDE FIX - MANUAL WINDOWS INSTALLATION
+
+This package installs the core ultrawide fix without running any scripts.
+
+INSTALL
+
+1. Close the game.
+2. In Steam, right-click the game and select Manage > Browse local files.
+3. Open MGS_PW\mgspw. This is the folder containing:
+   METAL GEAR SOLID PEACE WALKER.exe
+4. If that folder already contains winmm.dll, stop and back it up first.
+   Another mod may be using the same proxy filename.
+5. Copy these two files beside the game executable:
+   - winmm.dll
+   - PeaceWalkerUltraWideFix.ini
+6. Start the game normally through Steam.
+
+CONFIGURE
+
+Open PeaceWalkerUltraWideFix.ini in a text editor while the game is closed.
+Width=0 and Height=0 select the primary display automatically.
+CenterHUD=1 enables the experimental centered 16:9 interface.
+CenterHUD=0 keeps the interface at full output width.
+
+The optional Unity-launcher bypass is not part of this manual package. Use the
+guided Windows package if that feature is required.
+
+UNINSTALL
+
+1. Close the game.
+2. Remove winmm.dll and PeaceWalkerUltraWideFix.ini from MGS_PW\mgspw.
+3. Restore the previous winmm.dll if one was backed up in step 4.
+
+Keep antivirus protection enabled. Download only from the official GitHub
+release and verify the archive against SHA256SUMS.txt before installation.

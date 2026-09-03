@@ -22,7 +22,20 @@ I maintain the implementation, tests and release packages in this repository. Te
 - Optional, reversible Unity-launcher bypass.
 - Windows and Linux/Proton setup, configuration and uninstall flows.
 
-## Windows — quick setup
+## Choose an installation package
+
+Four packages are available in each release:
+
+| Platform | Guided setup | Manual setup |
+| --- | --- | --- |
+| Windows | `windows.zip` | `windows-manual.zip` |
+| Linux / Proton | `linux.tar.gz` | `linux-proton-manual.zip` |
+
+The guided packages provide configuration, safe backups, launcher-bypass control
+and uninstall tools. The manual packages contain only the core DLL, default INI
+and a short `INSTALL.txt`; they run no scripts and make no launcher changes.
+
+## Windows — guided setup
 
 1. Close the game.
 2. Download the latest `windows.zip` from [Releases](https://github.com/drbermejor/MGSPeaceWalkerUW-Fix/releases/latest).
@@ -40,7 +53,19 @@ explicitly:
 PeaceWalkerUltraWideFix-Setup.cmd -GameDir "D:\SteamLibrary\steamapps\common\MGS_PW\mgspw"
 ```
 
-## Linux / Proton — quick setup
+### Windows — manual setup
+
+1. Download and extract the latest `windows-manual.zip`.
+2. Open `MGS_PW\mgspw`, the folder containing
+   `METAL GEAR SOLID PEACE WALKER.exe`.
+3. Back up an existing `winmm.dll` before continuing; another mod may use it.
+4. Copy `winmm.dll` and `PeaceWalkerUltraWideFix.ini` beside the game executable.
+5. Start the game normally through Steam.
+
+The archive's `INSTALL.txt` contains configuration and safe removal steps. The
+manual package intentionally excludes the optional launcher bypass.
+
+## Linux / Proton — guided setup
 
 1. Close the game and Steam.
 2. Download and extract the latest `linux.tar.gz`.
@@ -61,6 +86,25 @@ WINEDLLOVERRIDES="winmm=n,b" %command%
 ```
 
 The Linux installer adds this reversibly when Steam is closed. If Steam is running, it prints the exact manual action instead of editing live state.
+
+### Linux / Proton — manual setup
+
+1. Download and extract the latest `linux-proton-manual.zip`.
+2. Open `MGS_PW/mgspw`, the folder containing
+   `METAL GEAR SOLID PEACE WALKER.exe`.
+3. Back up an existing `winmm.dll` before continuing; another mod may use it.
+4. Copy `winmm.dll` and `PeaceWalkerUltraWideFix.ini` beside the game executable.
+5. Set the Steam launch option to:
+
+```text
+WINEDLLOVERRIDES="winmm=n,b" %command%
+```
+
+6. Start the game normally through Steam.
+
+This path uses no scripts, `chmod` or `sudo`. The archive's `INSTALL.txt` contains
+configuration and safe removal steps. The optional launcher bypass remains
+available in the guided package.
 
 ## Configuration
 

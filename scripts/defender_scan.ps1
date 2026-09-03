@@ -5,7 +5,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Launcher,
 
-    [string]$Package,
+    [string[]]$Package,
 
     [switch]$UpdateSignatures
 )
@@ -26,8 +26,11 @@ $targets = @(
     [pscustomobject]@{ Name = 'proxy DLL'; Path = $Dll },
     [pscustomobject]@{ Name = 'launcher'; Path = $Launcher }
 )
-if ($Package) {
-    $targets += [pscustomobject]@{ Name = 'Windows package'; Path = $Package }
+foreach ($packagePath in $Package) {
+    $targets += [pscustomobject]@{
+        Name = "Windows package ($([IO.Path]::GetFileName($packagePath)))"
+        Path = $packagePath
+    }
 }
 
 $failed = $false
