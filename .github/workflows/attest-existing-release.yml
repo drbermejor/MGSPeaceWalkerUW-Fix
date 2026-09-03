@@ -1,6 +1,10 @@
 name: Validate and attest existing release
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/attest-existing-release.yml
   workflow_dispatch:
     inputs:
       tag:
@@ -24,6 +28,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
+          if (-not $env:RELEASE_TAG) {
+            $env:RELEASE_TAG = (Get-Content -Raw -LiteralPath VERSION).Trim()
+          }
           New-Item -ItemType Directory -Path artifacts | Out-Null
           gh release download $env:RELEASE_TAG --dir artifacts
       - name: Verify published checksums
