@@ -3,8 +3,8 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 FIXTURE="$(mktemp -d)"
 trap 'rm -rf -- "$FIXTURE"' EXIT
-export HOME="$FIXTURE/home" PW_GAME_DIR="$FIXTURE/Steam/steamapps/common/MGS_PW/mgspw"
-export STEAM_LOCALCONFIG="$HOME/.local/share/Steam/userdata/1/config/localconfig.vdf"
+export PW_GAME_DIR="$FIXTURE/Steam/steamapps/common/MGS_PW/mgspw"
+export STEAM_LOCALCONFIG="$FIXTURE/home/.local/share/Steam/userdata/1/config/localconfig.vdf"
 mkdir -p -- "$PW_GAME_DIR" "$(dirname -- "$STEAM_LOCALCONFIG")" "$(dirname -- "$PW_GAME_DIR")/launcher"
 printf fixture >"$PW_GAME_DIR/METAL GEAR SOLID PEACE WALKER.exe"
 printf previous >"$PW_GAME_DIR/winmm.dll"

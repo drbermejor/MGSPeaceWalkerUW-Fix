@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
 project(PeaceWalkerUltraWideFix VERSION 0.1.0 LANGUAGES C CXX)
 
-set(PWUWFIX_RELEASE "v0.1.0-rc.1" CACHE STRING "Public release label")
+set(PWUWFIX_RELEASE "v0.1.0-rc.3" CACHE STRING "Public release label")
+option(PWUWFIX_FORCE_SIGNATURE_FALLBACK
+    "Maintainer-only: ignore known PE identities to exercise signature resolution" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,6 +48,10 @@ add_library(pw_ultrawide SHARED
 )
 target_include_directories(pw_ultrawide PRIVATE "${WINMM_GENERATED_DIR}" src)
 target_compile_definitions(pw_ultrawide PRIVATE PWUWFIX_VERSION="${PWUWFIX_RELEASE}")
+if(PWUWFIX_FORCE_SIGNATURE_FALLBACK)
+    target_compile_definitions(pw_ultrawide PRIVATE
+        PWUWFIX_FORCE_SIGNATURE_FALLBACK=1)
+endif()
 set_target_properties(pw_ultrawide PROPERTIES
     OUTPUT_NAME winmm
     PREFIX ""
@@ -77,6 +83,10 @@ if(BUILD_TESTING)
     add_executable(pw_math_test tests/pw_math_test.cpp)
     target_include_directories(pw_math_test PRIVATE src)
     add_test(NAME pw_math COMMAND pw_math_test)
+
+    add_executable(pw_signature_test tests/pw_signature_test.cpp)
+    target_include_directories(pw_signature_test PRIVATE src)
+    add_test(NAME pw_signatures COMMAND pw_signature_test)
 
     add_executable(pw_launcher_args_probe tests/launcher_args_probe.cpp)
     set_target_properties(pw_launcher_args_probe PROPERTIES

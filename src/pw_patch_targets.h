@@ -1,0 +1,113 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+
+#include "pw_signature_resolver.h"
+
+namespace pw::targets {
+
+// Each locator covers complete instructions and was required to be unique in
+// both privately held, legally obtained Steam executables used for maintenance
+// (the builds immediately before and at Steam build 25052315). Masks ignore
+// only rel32 or RIP-relative displacements that legitimately move.
+
+inline constexpr std::uint8_t kResolutionTableBytes[] = {
+    0x00, 0x05, 0x00, 0x00, 0xd0, 0x02, 0x00, 0x00,
+    0x80, 0x07, 0x00, 0x00, 0x38, 0x04, 0x00, 0x00,
+    0x00, 0x0a, 0x00, 0x00, 0xa0, 0x05, 0x00, 0x00,
+    0x00, 0x0f, 0x00, 0x00, 0x70, 0x08, 0x00, 0x00,
+};
+
+inline constexpr std::uint8_t kProjectionTailBytes[] = {
+    0x0f, 0x28, 0xb4, 0x24, 0xf0, 0x00, 0x00, 0x00,
+    0x0f, 0x28, 0xbc, 0x24, 0xe0, 0x00, 0x00, 0x00,
+    0x0f, 0x29, 0x00, 0x0f, 0x28, 0x45, 0xe7, 0x0f,
+    0x29, 0x48, 0x10, 0x0f, 0x28, 0x4d, 0xf7, 0x0f,
+    0x29, 0x40, 0x20, 0x0f, 0x29, 0x48, 0x30, 0x48,
+    0x81, 0xc4, 0x00, 0x01, 0x00, 0x00, 0x5d, 0xc3,
+};
+
+inline constexpr std::uint8_t kViewportHookBytes[] = {
+    0x0f, 0x57, 0xc0, 0x8b, 0xc2, 0x0f, 0x57, 0xc9,
+    0xf3, 0x48, 0x0f, 0x2a, 0xc0, 0x41, 0x8b, 0xc0,
+    0xf3, 0x48, 0x0f, 0x2a, 0xc8, 0x41, 0x8b, 0xc1,
+    0xf3, 0x0f, 0x11, 0x44, 0x24, 0x20, 0x0f, 0x57,
+    0xc0, 0xf3, 0x48, 0x0f, 0x2a, 0xc0, 0x8b, 0x44,
+    0x24, 0x70,
+};
+
+inline constexpr std::uint8_t kFrameStartBytes[] = {
+    0x48, 0x8b, 0xc8, 0x44, 0x8b, 0xc8, 0x48, 0xc1,
+    0xe9, 0x20, 0x89, 0x4c, 0x24, 0x20, 0xe8, 0x00,
+    0x00, 0x00, 0x00, 0x48, 0x8b, 0x5c, 0x24, 0x68,
+    0x39, 0xaf, 0x9c, 0x2a, 0x00, 0x00,
+};
+inline constexpr std::uint8_t kFrameStartMask[] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    0, 0, 0, 0,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+};
+
+inline constexpr std::uint8_t kFrameMarkerBytes[] = {
+    0x48, 0x8b, 0x6c, 0x24, 0x48, 0x66, 0x0f, 0x6f,
+    0xc6, 0x66, 0x0f, 0x73, 0xd8, 0x08, 0x66, 0x49,
+    0x0f, 0x7e, 0xc1, 0x89, 0x6c, 0x24, 0x20, 0x49,
+    0xc1, 0xe9, 0x20, 0xe8, 0x00, 0x00, 0x00, 0x00,
+    0x83, 0xbf, 0x98, 0x2a, 0x00, 0x00, 0x00,
+};
+inline constexpr std::uint8_t kFrameMarkerMask[] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    0, 0, 0, 0,
+    1, 1, 1, 1, 1, 1, 1,
+};
+
+inline constexpr std::uint8_t kDisplayContextBytes[] = {
+    0x44, 0x89, 0xb3, 0xcc, 0x3b, 0x00, 0x00,
+    0x48, 0x89, 0x1d, 0x00, 0x00, 0x00, 0x00,
+    0x4c, 0x89, 0x35, 0x00, 0x00, 0x00, 0x00,
+    0x48, 0x8d, 0xb3, 0x80, 0x02, 0x00, 0x00,
+    0x48, 0x8d, 0xbb, 0x7c, 0x01, 0x00, 0x00,
+};
+inline constexpr std::uint8_t kDisplayContextMask[] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    0, 0, 0, 0,
+    1, 1, 1,
+    0, 0, 0, 0,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+};
+
+static_assert(sizeof(kFrameStartBytes) == sizeof(kFrameStartMask));
+static_assert(sizeof(kFrameMarkerBytes) == sizeof(kFrameMarkerMask));
+static_assert(sizeof(kDisplayContextBytes) == sizeof(kDisplayContextMask));
+
+inline constexpr signature::BytePattern kResolutionTable{
+    kResolutionTableBytes, nullptr, sizeof(kResolutionTableBytes)};
+inline constexpr signature::BytePattern kProjectionTail{
+    kProjectionTailBytes, nullptr, sizeof(kProjectionTailBytes)};
+inline constexpr signature::BytePattern kViewportHook{
+    kViewportHookBytes, nullptr, sizeof(kViewportHookBytes)};
+inline constexpr signature::BytePattern kFrameStart{
+    kFrameStartBytes, kFrameStartMask, sizeof(kFrameStartBytes)};
+inline constexpr signature::BytePattern kFrameMarker{
+    kFrameMarkerBytes, kFrameMarkerMask, sizeof(kFrameMarkerBytes)};
+inline constexpr signature::BytePattern kDisplayContext{
+    kDisplayContextBytes, kDisplayContextMask, sizeof(kDisplayContextBytes)};
+
+// Addresses derived from the start of each unique signature.
+inline constexpr std::size_t kProjectionStoreOffset = 0x10;
+inline constexpr std::size_t kProjectionEpilogueOffset = 0x27;
+inline constexpr std::size_t kFrameStartCallOffset = 0x0e;
+inline constexpr std::size_t kFrameStartReturnOffset = 0x13;
+inline constexpr std::size_t kFrameMarkerCallOffset = 0x1b;
+inline constexpr std::size_t kFrameMarkerReturnOffset = 0x20;
+inline constexpr std::size_t kDisplayContextInstructionOffset = 0x07;
+
+// Both maintained executables keep these two .data objects in the same block.
+// The derived address is still validated as a live perspective matrix before
+// it is used. A future build that changes the data layout therefore fails
+// closed instead of receiving a guessed write.
+inline constexpr std::uintptr_t kProjectionFromDisplayContext = 0x49e6a8;
+
+}  // namespace pw::targets

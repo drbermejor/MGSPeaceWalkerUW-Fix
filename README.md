@@ -7,7 +7,9 @@ Ultrawide support for **METAL GEAR SOLID PEACE WALKER - Master Collection Versio
 
 The fix removes the original side bars and corrects the 3D projection to produce a Hor+ ultrawide view instead of stretching the game. A centered 16:9 HUD/menu canvas and a reversible Unity-launcher bypass are optional.
 
-> This is the first public release candidate. The ultrawide projection and the main centered-HUD path are working, but the limitations below are real and intentionally documented.
+> This project remains a public release candidate. The ultrawide projection and the main centered-HUD path are working, but the limitations below are real and intentionally documented.
+
+I maintain the implementation, tests and release packages in this repository. Technical details and the evidence required after a game update are documented in [Architecture](docs/ARCHITECTURE.md) and [Update compatibility](docs/UPDATE_COMPATIBILITY.md).
 
 ![Ultrawide gameplay with centered interface](docs/images/gameplay-subtitles.jpg)
 
@@ -84,8 +86,14 @@ The public default for the bypass is English. Other supported game tokens (`sp`,
 - Full-screen 2D layers share the centered HUD canvas when `CenterHUD=1`, so side areas can remain uncovered during some transitions.
 - The game still renders its 3D world internally at its original high-resolution target (1920×1088) before composing it to the selected output. This fix changes aspect and composition, not internal asset quality.
 - Mouse-camera latency is present in the original port even with this patch disabled. It is not introduced by the ultrawide or HUD correction.
-- The patch fails safely on an unknown executable. It currently targets the tested Steam Master Collection build.
+- The patch has exact profiles for the tested Steam Master Collection builds from before and after Steam build 25052315. An unknown executable is accepted only when every signature and structural relationship resolves consistently; otherwise the hooks fail safely.
 - 3440×1440 is the primary visually verified ultrawide mode. The calculations are resolution-independent, but 32:9 and additional modes need broader public testing.
+
+## Game-update compatibility
+
+Known Steam builds use exact PE profiles and independently verify every code target. If a future update only moves otherwise unchanged code and data, the patch can recover the targets from complete signatures in memory. Every locator must be unique, both viewport call sites must resolve to the same wrapper, and the derived data addresses must stay inside the expected PE sections. Missing, ambiguous or inconsistent results are rejected.
+
+This improves resilience to address-only updates; it is not a promise that arbitrary engine changes will remain compatible. A change in behavior, instruction structure or data layout still requires analysis and in-game validation. See [Update compatibility](docs/UPDATE_COMPATIBILITY.md) for the exact boundary.
 
 ![Centered gameplay HUD](docs/images/gameplay-centered-hud.jpg)
 
@@ -121,6 +129,24 @@ cmake --build build
 ```
 
 Release archives are generated from CI-tested binaries with `scripts/package_release.py` and include SHA-256 checksums.
+
+## Antivirus and release trust
+
+This patch is a `winmm.dll` proxy that allocates small executable code islands
+and installs validated in-process detours. Those legitimate runtime-patching
+behaviors can trigger generic heuristic detections. The code does not download
+payloads, create persistence or modify another process.
+
+Keep antivirus protection enabled. Download only from this repository, verify
+`SHA256SUMS.txt`, and report the exact release, file hash and detection name if
+the latest build is blocked. Do not add a broad antivirus exclusion.
+
+Release assets are built in GitHub Actions, which generates GitHub
+build-provenance attestations in addition to checksums. See
+[Antivirus and release trust](docs/ANTIVIRUS.md) for the measured Defender case,
+verification commands and the official false-positive process.
+
+For contribution and validation requirements, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

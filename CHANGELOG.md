@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.1.0-rc.3 — 2026-09-03
+
+- Adds a fail-closed signature compatibility path for address-only game updates.
+- Validates the complete 32-byte resolution table before any table write.
+- Uses long, unique instruction windows and verifies related call targets before installing hooks.
+- Adds deterministic signature tests and a maintainer-only forced-fallback build mode.
+- Documents the runtime architecture, update boundary and validation procedure.
+- Preserves execute permission while patching live code pages, avoiding a race
+  with game threads already executing on the same page.
+- Adds a repeatable Defender check for extracted release executables and the
+  final package.
+- Adds GitHub build-provenance attestations for future release assets.
+- Documents antivirus false-positive handling without recommending exclusions
+  or disabling protection.
+
+## v0.1.0-rc.2 — 2026-09-02
+
+- Restores compatibility with Steam build 25052315 after the September game update.
+- Retains support for the previously tested Steam executable.
+- Selects all patch addresses from an exact, fail-closed executable profile.
+
+The centered-HUD behavior and its documented candidate limitations are unchanged.
+
 ## v0.1.0-rc.1 — 2026-08-30
 
 First public candidate.

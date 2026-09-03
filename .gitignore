@@ -2,7 +2,12 @@ build/
 build-*/
 bin/
 dist/*
+dist-*/
 __pycache__/
 *.pyc
 *.user
 *.log
+*.dmp
+*.dump
+*.unpacked.exe
+REVISION_*.md
