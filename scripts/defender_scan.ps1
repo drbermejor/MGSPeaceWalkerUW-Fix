@@ -54,4 +54,3 @@ if ($failed) {
 }
 
 Write-Host 'All requested targets passed Microsoft Defender.'
-
