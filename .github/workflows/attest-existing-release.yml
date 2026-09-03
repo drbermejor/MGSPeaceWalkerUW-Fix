@@ -1,0 +1,61 @@
+name: Validate and attest existing release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to validate and attest
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  validate:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the published assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          New-Item -ItemType Directory -Path artifacts | Out-Null
+          gh release download $env:RELEASE_TAG --dir artifacts
+      - name: Verify published checksums
+        shell: pwsh
+        run: |
+          Push-Location artifacts
+          try {
+            foreach ($line in Get-Content -LiteralPath SHA256SUMS.txt) {
+              if ($line -notmatch '^([0-9a-fA-F]{64})\s+(.+)$') {
+                throw "Invalid checksum line: $line"
+              }
+              $expected = $Matches[1]
+              $file = $Matches[2]
+              $actual = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
+              if ($actual -ne $expected) {
+                throw "Checksum mismatch for $file"
+              }
+            }
+          } finally {
+            Pop-Location
+          }
+      - name: Scan exact Windows asset with Microsoft Defender
+        shell: pwsh
+        run: |
+          $package = Get-Item ./artifacts/*-windows.zip
+          $expanded = Join-Path $env:RUNNER_TEMP 'release-windows'
+          Expand-Archive -LiteralPath $package.FullName -DestinationPath $expanded
+          ./scripts/defender_scan.ps1 `
+            -Dll (Join-Path $expanded 'bin/winmm.dll') `
+            -Launcher (Join-Path $expanded 'bin/launcher.exe') `
+            -Package $package.FullName
+      - name: Attest the exact published assets
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/*

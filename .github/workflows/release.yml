@@ -27,6 +27,16 @@ jobs:
         shell: pwsh
         run: ./tests/windows_package_smoke.ps1 -Dll ./build/bin/winmm.dll -Launcher ./build/bin/launcher.exe -LauncherProbe ./build/bin/pw_launcher_args_probe.exe
       - run: python scripts/package_release.py --dll build/bin/winmm.dll --launcher build/bin/launcher.exe
+      - name: Scan final Windows release with Microsoft Defender
+        shell: pwsh
+        run: |
+          $package = Get-Item ./dist/*-windows.zip
+          $expanded = Join-Path $env:RUNNER_TEMP 'release-windows'
+          Expand-Archive -LiteralPath $package.FullName -DestinationPath $expanded
+          ./scripts/defender_scan.ps1 `
+            -Dll (Join-Path $expanded 'bin/winmm.dll') `
+            -Launcher (Join-Path $expanded 'bin/launcher.exe') `
+            -Package $package.FullName
       - name: Attest release assets
         uses: actions/attest@v4
         with:
