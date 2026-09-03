@@ -8,7 +8,22 @@ if (-not (Test-Path -LiteralPath $versionFile)) { $versionFile = Join-Path $PSSc
 $script:Version = (Get-Content -Raw -LiteralPath $versionFile).Trim()
 
 function Test-PeaceWalkerGameDir([string]$Path) {
-    return $Path -and (Test-Path -LiteralPath (Join-Path $Path $script:ExeName) -PathType Leaf)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+    try {
+        return Test-Path -LiteralPath (Join-Path $Path $script:ExeName) -PathType Leaf
+    } catch {
+        # Steam can retain libraries on drives that are no longer mounted.
+        return $false
+    }
+}
+
+function Test-ExistingDirectory([string]$Path) {
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+    try {
+        return Test-Path -LiteralPath $Path -PathType Container
+    } catch {
+        return $false
+    }
 }
 
 function Get-SteamRoots {
@@ -23,13 +38,14 @@ function Get-SteamRoots {
 
     $all = [Collections.Generic.List[string]]::new()
     foreach ($root in $roots) {
-        if (-not $root) { continue }
+        if (-not (Test-ExistingDirectory $root)) { continue }
         $all.Add($root)
         $vdf = Join-Path $root "steamapps\libraryfolders.vdf"
         if (-not (Test-Path -LiteralPath $vdf)) { continue }
         foreach ($line in Get-Content -LiteralPath $vdf) {
             if ($line -match '^\s*"path"\s+"(.+)"') {
-                $all.Add(($matches[1] -replace '\\\\','\'))
+                $library = $matches[1] -replace '\\\\','\'
+                if (Test-ExistingDirectory $library) { $all.Add($library) }
             }
         }
     }
@@ -38,6 +54,7 @@ function Get-SteamRoots {
 
 function Find-PeaceWalkerGameDir {
     foreach ($root in Get-SteamRoots) {
+        if (-not (Test-ExistingDirectory $root)) { continue }
         $candidate = Join-Path $root "steamapps\common\MGS_PW\mgspw"
         if (Test-PeaceWalkerGameDir $candidate) { return $candidate }
     }

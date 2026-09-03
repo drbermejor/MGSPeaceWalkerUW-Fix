@@ -17,6 +17,17 @@ try {
     if (-not (Test-Path (Join-Path $game "PeaceWalkerUltraWideFix.ini"))) { throw "INI missing" }
     if ((Get-Content -Raw (Join-Path $game "PeaceWalkerUltraWideFix.ini")) -notmatch 'CenterHUD=1') { throw "recommended profile missing" }
     . (Join-Path $game ".PeaceWalkerUltraWideFix\common.ps1")
+
+    # A removed Steam-library drive must be skipped instead of aborting the
+    # search before a valid library is checked.
+    $library = Join-Path $fixture "valid-library"
+    $discoveryGame = Join-Path $library "steamapps\common\MGS_PW\mgspw"
+    New-Item -ItemType Directory -Force -Path $discoveryGame | Out-Null
+    Copy-Item -LiteralPath $LauncherProbe -Destination (Join-Path $discoveryGame "METAL GEAR SOLID PEACE WALKER.exe")
+    function Get-SteamRoots { return @("PWUW_MISSING_DRIVE:\old-library", $library) }
+    $found = Find-PeaceWalkerGameDir
+    if ($found -ne $discoveryGame) { throw "Steam discovery did not skip an unavailable drive" }
+
     Set-LauncherBypass $game $true
     if ((Get-FileHash $Launcher).Hash -ne (Get-FileHash (Join-Path $launcherDir "launcher.exe")).Hash) { throw "bypass not installed" }
     Start-Process -FilePath (Join-Path $launcherDir "launcher.exe") -Wait

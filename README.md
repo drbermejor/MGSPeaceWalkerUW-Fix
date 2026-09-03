@@ -33,6 +33,13 @@ I maintain the implementation, tests and release packages in this repository. Te
 
 The installer preserves a pre-existing `winmm.dll` and restores it on uninstall. It never silently removes a DLL or launcher that changed after installation.
 
+If automatic Steam-library detection is unsuitable, pass the game directory
+explicitly:
+
+```powershell
+PeaceWalkerUltraWideFix-Setup.cmd -GameDir "D:\SteamLibrary\steamapps\common\MGS_PW\mgspw"
+```
+
 ## Linux / Proton — quick setup
 
 1. Close the game and Steam.

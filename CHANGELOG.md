@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Windows setup now ignores stale Steam-library entries whose drives are no
+  longer mounted, then continues searching the remaining libraries.
+- Adds a regression test covering an unavailable drive followed by a valid
+  custom Steam library.
+
 ## v0.1.0-rc.3 — 2026-09-03
 
 - Adds a fail-closed signature compatibility path for address-only game updates.
