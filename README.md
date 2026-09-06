@@ -212,6 +212,12 @@ verification commands and the official false-positive process.
 
 For contribution and validation requirements, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Acknowledgements
+
+Special thanks to **egnyrs** for testing the patch at **5120×2160** on Windows,
+sharing logs and screenshots throughout the resolution-fix testing, and
+validating both full-width and centered HUD gameplay for v0.1.0-rc.6.
+
 ## License
 
 [MIT](LICENSE)
