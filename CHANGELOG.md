@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## v0.1.0-rc.6 — 2026-09-06
+
+- Fixes persistent gameplay side bars when the launch-selected resolution row
+  differs from the row inferred from desktop height, including the reported
+  5120x2160 case on Windows / Steam build 25052315.
+- Selects the audited startup row from launch mode codes and writes it before
+  display-context initialization. Does not migrate or rewrite it during play,
+  avoiding the enlarged, offset crop seen in the first private experiment.
+- Enables this policy automatically on the audited build, including upgrades
+  retaining an older INI. Older and signature-only profiles retain their prior
+  policy; explicit EarlyResolution=0 remains a diagnostic opt-out.
+- Adds checked table readback, optional cached-framing diagnostics, conservative
+  launch-parser tests and Windows memory/runtime regression tests.
+- Records reporter validation at 5120x2160 with full-width and centered HUD.
+  The supplied cinematic capture retains centered side bars; this is not a
+  claim of full-width cinematics or validation of every game screen.
+- Leaves projection, horizontal visibility, HUD code islands and audio proxy
+  unchanged from the tested candidate. Proton runtime acceptance of this new
+  resolution path remains outstanding.
+
 ## v0.1.0-rc.5 — 2026-09-03
 
 - Adds dedicated script-free manual ZIPs for Windows and Linux/Proton.

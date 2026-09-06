@@ -10,7 +10,7 @@ The fix has three independent settings:
 
 | Setting | Game behavior | Implementation |
 | --- | --- | --- |
-| `RemoveLetterboxing` | Makes the output surface use the requested ultrawide size | Replaces one validated row in the four-entry resolution table and reasserts it if the game restores the row |
+| `RemoveLetterboxing` | Makes the output surface use the requested ultrawide size | Replaces one validated row before display initialization on audited build 25052315; other profiles retain legacy row maintenance |
 | `CorrectFOV` | Preserves vertical FOV, expands horizontal view and keeps visibility consistent with it | Redirects the projection-builder epilogue to write `m0 = m5 / aspect`, then widens only the camera's left/right visibility planes from the same live FOV and output aspect |
 | `CenterHUD` | Fits the shared 2D presentation into a centered 16:9 band | Redirects the viewport wrapper and classifies the 2D block from two verified frame call sites |
 
@@ -22,13 +22,20 @@ The game builds six CPU-side visibility planes immediately after updating the ca
 
 1. Read the PE identity and select an exact profile when one is known.
 2. Find the original four-row resolution table uniquely inside `.rdata` and verify all 32 bytes before allowing a write.
-3. Start table maintenance early. The initial framing can otherwise be calculated from the original 16:9 row while SteamStub is still decrypting `.text`.
+3. On build 25052315, select the row from audited launch codes and synchronously write it only if the display context is still unpublished; monitor read-only afterward. Other profiles (or explicit EarlyResolution=0) start legacy height-selected table maintenance. Initial framing can otherwise be calculated from the wrong 16:9 row while SteamStub is still decrypting `.text`.
 4. Wait for the in-memory `.text` section to be decrypted.
 5. Resolve six complete code signatures and validate their relationships.
 6. For a known profile, require every resolved RVA to match the profile.
 7. Install only the enabled hooks.
 
 SteamStub encrypts the retail code on disk, so code signatures are searched in the mapped process image after decryption. The resolution table is not encrypted and can be verified immediately.
+
+The early path checks context publication before and after its verified write.
+These samples are not a global thread lock; a context appearing during the write
+is explicitly logged as uncertain ordering. A context already present before
+the write is refused. Runtime row migration is never attempted in this mode:
+changing only live table dimensions cannot update already-cached framing and
+graphics resources. See [resolution validation](VALIDATION_2026-09-06_RESOLUTION.md).
 
 ## Signature compatibility path
 

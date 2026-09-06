@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 project(PeaceWalkerUltraWideFix VERSION 0.1.0 LANGUAGES C CXX)
 
-set(PWUWFIX_RELEASE "v0.1.0-rc.5" CACHE STRING "Public release label")
+set(PWUWFIX_RELEASE "v0.1.0-rc.6" CACHE STRING "Public release label")
 option(PWUWFIX_FORCE_SIGNATURE_FALLBACK
     "Maintainer-only: ignore known PE identities to exercise signature resolution" OFF)
 
@@ -47,6 +47,7 @@ add_library(pw_ultrawide SHARED
     "${WINMM_DEFINITION}"
 )
 target_include_directories(pw_ultrawide PRIVATE "${WINMM_GENERATED_DIR}" src)
+target_link_libraries(pw_ultrawide PRIVATE shell32)
 target_compile_definitions(pw_ultrawide PRIVATE PWUWFIX_VERSION="${PWUWFIX_RELEASE}")
 if(PWUWFIX_FORCE_SIGNATURE_FALLBACK)
     target_compile_definitions(pw_ultrawide PRIVATE
@@ -87,6 +88,13 @@ if(BUILD_TESTING)
     add_executable(pw_signature_test tests/pw_signature_test.cpp)
     target_include_directories(pw_signature_test PRIVATE src)
     add_test(NAME pw_signatures COMMAND pw_signature_test)
+
+    if(WIN32)
+        add_executable(pw_resolution_runtime_test tests/pw_resolution_runtime_test.cpp)
+        target_include_directories(pw_resolution_runtime_test PRIVATE src)
+        target_link_libraries(pw_resolution_runtime_test PRIVATE shell32)
+        add_test(NAME pw_resolution_runtime COMMAND pw_resolution_runtime_test)
+    endif()
 
     add_executable(pw_launcher_args_probe tests/launcher_args_probe.cpp)
     set_target_properties(pw_launcher_args_probe PROPERTIES

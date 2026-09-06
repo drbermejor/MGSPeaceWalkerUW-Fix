@@ -16,6 +16,13 @@ If any condition fails, the affected hooks are not installed and the log states 
 
 ## What it cannot guarantee
 
+Starting with rc.6, the early launch-selected resolution policy is enabled by
+default only for exact Steam build 25052315. Its parser and pre-initialization
+context checks require a separate audit: matching the existing hook signatures
+does not establish those startup semantics. Older and signature-only profiles
+retain the legacy height-selected policy. Explicit `EarlyResolution=1` on an
+unaudited profile is refused before table writes or hooks.
+
 Signatures do not make the patch independent of the game implementation. Automatic compatibility is not accepted when an update:
 
 - changes the projection or viewport logic;

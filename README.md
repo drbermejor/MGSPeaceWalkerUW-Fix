@@ -125,6 +125,17 @@ BypassUnityLauncher=0
 
 `Width=0` and `Height=0` use the physical primary display. Set both explicitly if automatic detection is unsuitable under Proton.
 
+The target is the primary Windows desktop resolution (or explicit `Width` and
+`Height`), not a fixed 3440x1440 value and not automatic tracking of the launcher's
+resolution choice or a secondary monitor. Restart after changing resolution.
+On Steam build 25052315, rc.6 selects the table row from the game's launch mode
+codes and applies the target before display initialization. This is automatic
+even with an older INI. Other executable profiles retain the previous policy.
+For troubleshooting only, `EarlyResolution=0` opts out of the new policy and
+`ResolutionDiagnostics=1` logs table, cached framing and window-size checks.
+Remove an explicit `EarlyResolution=0` left by an earlier comparison test to
+restore the automatic default.
+
 `CorrectFOV=1` keeps vertical FOV, expands the horizontal view and widens the matching CPU-side visibility boundary. The two source hooks are treated as one correction so visible ultrawide geometry is not rejected by the original 16:9 planes.
 
 `CenterHUD=1` keeps most 2D presentation in a centered 16:9 canvas. `CenterHUD=0` leaves the interface at full output width while retaining the corrected ultrawide 3D view.
@@ -140,7 +151,7 @@ The public default for the bypass is English. Other supported game tokens (`sp`,
 - The game still renders its 3D world internally at its original high-resolution target (1920×1088) before composing it to the selected output. This fix changes aspect and composition, not internal asset quality.
 - Mouse-camera latency is present in the original port even with this patch disabled. It is not introduced by the ultrawide or HUD correction.
 - The patch has exact profiles for the tested Steam Master Collection builds from before and after Steam build 25052315. An unknown executable is accepted only when every signature and structural relationship resolves consistently; otherwise the hooks fail safely.
-- 3440×1440 is the primary visually verified ultrawide mode. The 32:9 horizontal-visibility path has been reproduced with a live aspect simulation, but physical 5120×1440 and additional modes still need broader public testing.
+- 3440×1440 has local visual validation. The rc.6 resolution correction was also validated by a Windows reporter at 5120×2160, with full-width and centered gameplay HUD. The supplied cinematic remains centered with side bars; not every screen or cinematic has been validated. Physical 5120×1440, other modes and the new startup path under Proton still need broader runtime testing.
 
 ## Game-update compatibility
 

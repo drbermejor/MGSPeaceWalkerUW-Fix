@@ -16,6 +16,7 @@ COMMON = ["VERSION", "README.md", "CHANGELOG.md", "LICENSE", "SECURITY.md",
           "config/PeaceWalkerUltraWideFix.ini", "docs/ARCHITECTURE.md",
           "docs/ANTIVIRUS.md", "docs/HORIZONTAL_VISIBILITY.md",
           "docs/UPDATE_COMPATIBILITY.md",
+          "docs/VALIDATION_2026-09-06_RESOLUTION.md",
           "docs/VALIDATION_2026-09-03_VISIBILITY.md", "docs/images"]
 WINDOWS = ["PeaceWalkerUltraWideFix-Setup.cmd", "PeaceWalkerUltraWideFix-Configure.cmd",
            "PeaceWalkerUltraWideFix-Uninstall.cmd", "scripts/windows"]

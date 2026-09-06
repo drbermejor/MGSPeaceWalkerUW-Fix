@@ -1,0 +1,39 @@
+PEACE WALKER - PRIVATE RESOLUTION TEST 1 (WINDOWS)
+
+This is a diagnostic candidate, not a confirmed fix or a public release.
+It verifies table writes and can follow a stable active resolution-table row.
+It does not change the desktop resolution or the launcher.
+
+1. Close the game. Open MGS_PW\mgspw beside
+   METAL GEAR SOLID PEACE WALKER.exe.
+2. Copy your current winmm.dll and PeaceWalkerUltraWideFix.ini to a separate
+   backup folder outside mgspw. Keep both for rollback.
+3. Copy this package's winmm.dll and PeaceWalkerUltraWideFix.ini into mgspw.
+4. Leave Windows at your normal 5120x2160 resolution. Start through Steam as
+   usual, keeping the same launcher settings as the previous test.
+5. Enter the tutorial and play for at least 20 seconds. Capture the screen.
+   Note whether the side bars disappear, persist, or the image becomes offset.
+6. Close the game and copy PeaceWalkerUltraWideFix.log elsewhere BEFORE
+   restarting: the log is overwritten on each start. Pasting its text is fine.
+7. For comparison, change ONLY FollowActiveResolution=1 to
+   FollowActiveResolution=0 in the INI. Restart, visit the same scene and save
+   a second screenshot and log. This keeps the original row-selection policy
+   while retaining diagnostic logging.
+
+SEND BACK
+- Both logs (label them Follow=1 and Follow=0) and screenshots.
+- The resolution/upscaling setting selected in the official launcher, or say
+  that you use the optional launcher bypass.
+- If trying 2560x1080, say whether you changed Windows, the launcher or the INI.
+
+Width=0 and Height=0 detect the primary desktop. If the game is on a secondary
+monitor, set BOTH to that monitor's actual resolution and mention this.
+CenterHUD=0 keeps this test independent of the optional centered interface.
+FollowActiveResolution=1 waits for three stable samples before switching rows.
+ResolutionDiagnostics=1 logs table/client-size snapshots for two minutes.
+The snapshots do not measure the GPU viewport or prove a visual fix.
+
+ROLLBACK
+Close the game and restore the two original files from your backup folder.
+If this test makes the image worse, roll back and send the saved log.
+Keep antivirus enabled. Do not bypass a detection; report it instead.

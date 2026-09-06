@@ -23,6 +23,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <mmsystem.h>
+#include <shellapi.h>
 
 #include <atomic>
 #include <cstdarg>
@@ -36,6 +37,7 @@
 #include "pw_frustum_island.h"
 #include "pw_patch_targets.h"
 #include "pw_projection_island.h"
+#include "pw_resolution_mode.h"
 
 #ifndef PWUWFIX_VERSION
 #define PWUWFIX_VERSION "development"
@@ -72,6 +74,12 @@ constexpr ExecutableProfile kProfiles[] = {
 };
 
 const ExecutableProfile* g_profile;
+
+bool early_resolution_default(const ExecutableProfile* profile) {
+    // Only this exact build has an audited launch parser and startup context.
+    return profile && profile->timestamp == 0x6a964726 &&
+           profile->image_size == 0x019a2000;
+}
 
 struct PatchTargets {
     std::uintptr_t resolution_table;
@@ -122,6 +130,9 @@ bool g_fix_hud = true;
 bool g_projection_hooked;
 bool g_frustum_hooked;
 std::atomic<std::uintptr_t> g_display_context_address{};
+std::uintptr_t g_resolution_table_address;
+bool g_resolution_diagnostics;
+bool g_early_resolution;
 
 bool projection_looks_valid(const float* matrix);
 
@@ -217,6 +228,7 @@ bool resolve_resolution_table() {
         return false;
     }
     g_targets.resolution_table = resolved;
+    g_resolution_table_address = match.address;
     return true;
 }
 
@@ -425,35 +437,62 @@ bool wait_for_code(unsigned timeout_ms) {
     return false;
 }
 
-int choose_slot(int height) {
-    const auto* table = reinterpret_cast<const std::int32_t*>(
-        g_base + g_targets.resolution_table);
-    for (int i = 0; i < kResolutionSlots; ++i)
-        if (table[i * 2 + 1] == height) return i;
+// Diagnostic reads must fail safely if the context has not been constructed,
+// is changing, or is no longer readable. Never dereference a sampled pointer.
+bool read_local(std::uintptr_t address, void* out, std::size_t size) {
+    SIZE_T read = 0;
+    return address && ReadProcessMemory(GetCurrentProcess(),
+        reinterpret_cast<const void*>(address), out, size, &read) && read == size;
+}
 
-    // Non-standard heights do not identify one of the four table rows. Once
-    // code signatures have resolved the display context, its active row is a
-    // safe fallback. Standard heights never depend on this late value.
+bool read_resolution_table(std::int32_t (&table)[8]) {
+    return read_local(g_resolution_table_address, table, sizeof(table));
+}
+
+int active_resolution_slot() {
     const auto context_address =
         g_display_context_address.load(std::memory_order_acquire);
-    if (context_address) {
-        const auto context =
-            *reinterpret_cast<std::uintptr_t const volatile*>(context_address);
-        if (context) {
-            const int index = *reinterpret_cast<const int*>(context + kCtxSlotIndex);
-            if (index >= 0 && index < kResolutionSlots) return index;
-        }
-    }
+    std::uintptr_t context = 0, confirmed_context = 0;
+    int index = -1;
+    if (!read_local(context_address, &context, sizeof(context)) || !context ||
+        context > (std::numeric_limits<std::uintptr_t>::max)() - kCtxSlotIndex ||
+        !read_local(context + kCtxSlotIndex, &index, sizeof(index)) ||
+        !read_local(context_address, &confirmed_context, sizeof(confirmed_context)) ||
+        confirmed_context != context) return -1;
+    return index >= 0 && index < kResolutionSlots ? index : -1;
+}
+
+int choose_slot(int height) {
+    std::int32_t table[8]{};
+    if (!read_resolution_table(table)) return -1;
+    for (int i = 0; i < kResolutionSlots; ++i)
+        if (table[i * 2 + 1] == height) return i;
+    // Retain rc.5's fallback for non-standard heights.
+    return active_resolution_slot();
+}
+
+int height_slot(int height) {
+    constexpr int heights[] = {720, 1080, 1440, 2160};
+    for (int i = 0; i < kResolutionSlots; ++i)
+        if (heights[i] == height) return i;
     return -1;
 }
 
 bool patch_resolution_table(int slot, int width, int height) {
+    if (slot < 0 || slot >= kResolutionSlots || width <= 0 || height <= 0)
+        return false;
     auto* entry = reinterpret_cast<std::int32_t*>(
-        g_base + g_targets.resolution_table +
+        g_resolution_table_address +
         static_cast<std::uintptr_t>(slot) * 8);
-    if (entry[0] == width && entry[1] == height) return true;
+    std::int32_t observed[2]{};
+    if (!read_local(reinterpret_cast<std::uintptr_t>(entry), observed,
+                    sizeof(observed))) return false;
+    if (observed[0] == width && observed[1] == height) return true;
     const std::int32_t values[2] = {width, height};
-    return write_protected(entry, values, sizeof(values));
+    if (!write_protected(entry, values, sizeof(values))) return false;
+    return read_local(reinterpret_cast<std::uintptr_t>(entry), observed,
+                      sizeof(observed)) &&
+           observed[0] == width && observed[1] == height;
 }
 
 bool projection_looks_valid(const float* m) {
@@ -531,25 +570,174 @@ bool install_hud_hook(int x, int width) {
     return true;
 }
 
-// Reassert the selected table row because the game can restore it later. This
-// thread starts before .text is decrypted; delaying it until hook resolution
-// lets the game calculate its initial framing from the original 16:9 row.
-DWORD WINAPI maintain_resolution_table(LPVOID) {
-    auto* table = reinterpret_cast<std::int32_t*>(
-        g_base + g_targets.resolution_table);
+// Early mode writes once before context publication and only observes afterward.
+// Legacy mode retains the original table maintenance on unaudited profiles.
+struct ResolutionMonitor {
     int slot = -1;
+    unsigned events = 0;
+    unsigned attempts = 0;
+    unsigned failures = 0;
     bool announced = false;
+    bool inconsistent = false;
+};
 
+ResolutionMonitor g_initial_resolution;
+
+bool apply_early_resolution(ResolutionMonitor& state, int slot,
+                            std::uintptr_t context_address) {
+    if (slot < 0 || slot >= kResolutionSlots) return false;
+    state.slot = slot;
+    if (!g_fix_table) return true;
+    // Exact-profile data address only. Refuse an already-published context:
+    // late table writes cannot resize resources or recalculate the framing.
+    std::uintptr_t context = 0;
+    if (!read_local(context_address, &context, sizeof(context)) || context) {
+        log_line("ERROR: early resolution refused: display context already exists "
+                 "or cannot be read. No late table correction will be attempted.");
+        return false;
+    }
+    ++state.attempts;
+    if (!patch_resolution_table(slot, g_width, g_height)) {
+        ++state.failures;
+        log_line("ERROR: early resolution write/readback failed for row [%d].", slot);
+        return false;
+    }
+    state.announced = true;
+    const bool still_unpublished = read_local(context_address, &context, sizeof(context)) && !context;
+    log_line("Early resolution VERIFIED: row [%d] = %dx%d; "
+             "display context unpublished before write=%d, after write=%d. "
+             "Live row migration and reassertion are disabled.",
+             slot, g_width, g_height, 1, still_unpublished);
+    if (!still_unpublished)
+        log_line("WARNING: context appeared during early write; startup ordering "
+                 "is not established. Inspect framing diagnostics and screenshot.");
+    return true;
+}
+
+void maintain_resolution_once(ResolutionMonitor& state) {
+    const int active = active_resolution_slot();
+    if (g_early_resolution) {
+        if (!g_fix_table) return;
+        std::int32_t rows[8]{};
+        const bool consistent = state.slot >= 0 && state.slot < kResolutionSlots &&
+            read_resolution_table(rows) && rows[state.slot * 2] == g_width &&
+            rows[state.slot * 2 + 1] == g_height && (active < 0 || active == state.slot);
+        if (!consistent && !state.inconsistent) {
+            log_line("ERROR: early resolution state changed (selected=%d, active=%d). "
+                     "No live correction: restart and report this log.", state.slot, active);
+        }
+        state.inconsistent = !consistent;
+        return;
+    }
+    if (state.slot < 0) state.slot = choose_slot(g_height);
+    if (!g_fix_table || state.slot < 0) return;
+    std::int32_t table[8]{};
+    if (!read_resolution_table(table)) {
+        if (state.events++ < 64) log_line("ERROR: resolution table unreadable.");
+        return;
+    }
+    const int old_width = table[state.slot * 2];
+    const int old_height = table[state.slot * 2 + 1];
+    const bool needs_write = old_width != g_width || old_height != g_height;
+    if (needs_write) ++state.attempts;
+    const bool verified = patch_resolution_table(state.slot, g_width, g_height);
+    if (!verified) {
+        ++state.failures;
+        if (state.events++ < 64)
+            log_line("ERROR: row [%d] write/readback failed; wanted %dx%d, "
+                     "previously %dx%d. No success claimed.",
+                     state.slot, g_width, g_height, old_width, old_height);
+        state.announced = false;
+    } else if (!state.announced || (g_resolution_diagnostics && needs_write)) {
+        if (state.events++ < 64)
+            log_line("Resolution table VERIFIED: row [%d] %dx%d -> %dx%d; "
+                     "sampled active row=%d.", state.slot, old_width, old_height,
+                     g_width, g_height, active);
+        state.announced = true;
+    }
+}
+
+BOOL CALLBACK find_game_window(HWND window, LPARAM arg) {
+    DWORD process = 0;
+    GetWindowThreadProcessId(window, &process);
+    if (process != GetCurrentProcessId() || !IsWindowVisible(window) ||
+        GetWindow(window, GW_OWNER)) return TRUE;
+    *reinterpret_cast<HWND*>(arg) = window;
+    return FALSE;
+}
+
+struct FramingSnapshot {
+    std::int32_t canvas_and_origin[4]{};
+    std::int32_t descriptor_size[2]{};
+    std::int32_t active = -1;
+};
+
+bool read_framing_snapshot(FramingSnapshot& snapshot) {
+    const auto address = g_display_context_address.load(std::memory_order_acquire);
+    std::uintptr_t context = 0, confirmed = 0;
+    if (!read_local(address, &context, sizeof(context)) || !context ||
+        context > (std::numeric_limits<std::uintptr_t>::max)() - 0x29a8) return false;
+    return read_local(context + 0x2940, snapshot.canvas_and_origin, sizeof(snapshot.canvas_and_origin)) &&
+        read_local(context + 0x29a0, snapshot.descriptor_size, sizeof(snapshot.descriptor_size)) &&
+        read_local(context + kCtxSlotIndex, &snapshot.active, sizeof(snapshot.active)) &&
+        read_local(address, &confirmed, sizeof(confirmed)) && confirmed == context;
+}
+
+bool framing_matches_target(const FramingSnapshot& snapshot, int slot, int width, int height) {
+    const auto* c = snapshot.canvas_and_origin;
+    return snapshot.active == slot && c[0] == width && c[1] == height &&
+        c[2] == 0 && c[3] == 0 && snapshot.descriptor_size[0] == width &&
+        snapshot.descriptor_size[1] == height;
+}
+
+void log_resolution_snapshot(const ResolutionMonitor& state, unsigned seconds) {
+    std::int32_t table[8]{};
+    if (read_resolution_table(table))
+        log_line("Resolution snapshot t=%us: height-row=%d, selected=%d, "
+                 "active=%d; rows=[%dx%d, %dx%d, %dx%d, %dx%d]; "
+                 "write-attempts=%u, failures=%u.", seconds, height_slot(g_height),
+                 state.slot, active_resolution_slot(), table[0], table[1],
+                 table[2], table[3], table[4], table[5], table[6], table[7],
+                 state.attempts, state.failures);
+    // These field offsets were audited on build 25052315 only.
+    if (g_profile && g_profile->timestamp == 0x6a964726) {
+        FramingSnapshot snapshot;
+        if (read_framing_snapshot(snapshot)) {
+            const auto* c = snapshot.canvas_and_origin;
+            log_line("Cached framing: canvas=%dx%d, origin=%d,%d, "
+                     "output-descriptor=%dx%d; matches-target=%d. "
+                     "CPU snapshot only, not a live GPU resource/viewport measurement.",
+                     c[0], c[1], c[2], c[3], snapshot.descriptor_size[0], snapshot.descriptor_size[1],
+                     framing_matches_target(snapshot, state.slot, g_width, g_height));
+        }
+    }
+    HWND window = nullptr;
+    EnumWindows(find_game_window, reinterpret_cast<LPARAM>(&window));
+    RECT client{};
+    // Read the physical client size without changing the game's DPI policy.
+    using SetContext = HANDLE(WINAPI*)(HANDLE);
+    const auto set_context = reinterpret_cast<SetContext>(GetProcAddress(
+        GetModuleHandleW(L"user32.dll"), "SetThreadDpiAwarenessContext"));
+    HANDLE previous = set_context ? set_context(reinterpret_cast<HANDLE>(-4)) : nullptr;
+    const bool have_client = window && GetClientRect(window, &client);
+    if (previous) set_context(previous);
+    if (have_client)
+        log_line("Window client%s: %ldx%ld. This is not a GPU viewport measurement.",
+                 previous ? " (physical)" : " (DPI context unchanged)",
+                 client.right - client.left, client.bottom - client.top);
+}
+
+DWORD WINAPI maintain_resolution_table(LPVOID) {
+    ResolutionMonitor state = g_initial_resolution;
+    unsigned tick = 0;
     for (;;) {
-        if (slot < 0) slot = choose_slot(g_height);
-        if (slot >= 0) {
-            if (table[slot * 2] != g_width || table[slot * 2 + 1] != g_height)
-                patch_resolution_table(slot, g_width, g_height);
-            if (!announced) {
-                announced = true;
-                log_line("Resolution table: entry [%d] = %dx%d.", slot,
-                         g_width, g_height);
-            }
+        maintain_resolution_once(state);
+        if (g_resolution_diagnostics && tick <= 480) {
+            if (tick % 20 == 0) log_resolution_snapshot(state, tick / 4);
+            if (tick == 480)
+                log_line("Resolution diagnostic sampling complete (120s); "
+                         "monitoring continues. Snapshots are asynchronous.");
+            ++tick;
         }
         Sleep(250);
     }
@@ -585,12 +773,24 @@ DWORD WINAPI initialize(LPVOID) {
     g_fix_table = setting(L"RemoveLetterboxing", L"FixLetterbox", 1) != 0;
     g_fix_projection = setting(L"CorrectFOV", L"FixProjection", 1) != 0;
     g_fix_hud = setting(L"CenterHUD", L"KeepHudAt16by9", 1) != 0;
+    g_resolution_diagnostics = setting(L"ResolutionDiagnostics", L"ResolutionDiagnostics", 0) != 0;
+    if (setting(L"FollowActiveResolution", L"FollowActiveResolution", 0) != 0)
+        log_line("FollowActiveResolution is retired and ignored: late migration can crop the image.");
 
     g_base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
     if (!read_executable_identity()) {
         log_line("ERROR: invalid executable image; no changes will be applied.");
         return 0;
     }
+    g_early_resolution = setting(L"EarlyResolution", L"EarlyResolution",
+                                early_resolution_default(g_profile) ? 1 : 0) != 0;
+    log_line("Resolution policy: %s.", g_early_resolution
+             ? "early launch-selected row (no live migration)"
+             : "legacy height-selected row");
+    if (g_resolution_diagnostics)
+        log_line("Diagnostic settings: RemoveLetterboxing=%d, CorrectFOV=%d, "
+                 "CenterHUD=%d, EarlyResolution=%d.", g_fix_table,
+                 g_fix_projection, g_fix_hud, g_early_resolution);
     if (g_profile) {
         log_line("Executable profile: %s.", g_profile->name);
     } else {
@@ -613,9 +813,17 @@ DWORD WINAPI initialize(LPVOID) {
     }
 
     physical_desktop_size(&g_width, &g_height);
+    if (g_resolution_diagnostics)
+        log_line("Primary desktop detected before INI override: %dx%d.", g_width, g_height);
     const int cfg_w = setting(L"Width", L"Width", 0);
     const int cfg_h = setting(L"Height", L"Height", 0);
     if (cfg_w > 0 && cfg_h > 0) { g_width = cfg_w; g_height = cfg_h; }
+    if (g_resolution_diagnostics) {
+        log_line("INI Width=%d Height=%d; target resolution source=%s.", cfg_w, cfg_h,
+                 cfg_w > 0 && cfg_h > 0 ? "INI" : "primary desktop");
+        ResolutionMonitor initial;
+        log_resolution_snapshot(initial, 0);
+    }
     if (g_width <= 0 || g_height <= 0) {
         log_line("ERROR: unable to determine the display resolution.");
         return 0;
@@ -630,13 +838,38 @@ DWORD WINAPI initialize(LPVOID) {
         return 0;
     }
 
-    // Start the maintenance thread before waiting for decryption. If the table
-    // is patched late, the game has already calculated the framing and the
-    // image appears offset.
-    if (g_fix_table) {
+    if (g_early_resolution) {
+        // Keep early initialization confined to the audited exact build.
+        if (!early_resolution_default(g_profile)) {
+            log_line("ERROR: EarlyResolution requires Steam build 25052315. "
+                     "No table writes or hooks will be applied.");
+            return 0;
+        }
+        int argc = 0;
+        auto** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+        const auto mode = pw::launch_resolution(argc, argv);
+        if (argv) LocalFree(argv);
+        if (!mode.valid) {
+            log_line("ERROR: ambiguous or unsupported resolution arguments. "
+                     "No table writes or hooks will be applied.");
+            return 0;
+        }
+        log_line("Launch resolution: resolution=%d, upscale=%d, selected row=%d "
+                 "(max of mode codes; not desktop height).", mode.resolution, mode.upscale, mode.slot);
+        // Synchronous first write, before code decryption/signature waiting or
+        // creating the monitor thread. Do not wait for the live context index.
+        if (!apply_early_resolution(g_initial_resolution, mode.slot,
+                                   g_base + g_profile->display_context)) return 0;
+    }
+
+    // Early mode is read-only after its first synchronous write.
+    // EarlyResolution=0 retains the original height-selected table maintenance.
+    if (g_fix_table || g_resolution_diagnostics) {
         const HANDLE thread = CreateThread(
             nullptr, 0, maintain_resolution_table, nullptr, 0, nullptr);
         if (thread) CloseHandle(thread);
+        else log_line("ERROR: resolution maintenance thread could not start (%lu).",
+                      GetLastError());
     }
 
     if (!wait_for_code(30000)) {

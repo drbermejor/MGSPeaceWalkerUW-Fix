@@ -1,0 +1,37 @@
+PEACE WALKER - PRIVATE RESOLUTION TEST 2 (WINDOWS, STEAM BUILD 25052315)
+
+This replaces test 1. It is a candidate, not a confirmed public fix.
+It selects the resolution row from launch arguments and writes it early.
+It does NOT change the launcher or Windows display settings.
+
+1. Close the game. Back up winmm.dll and PeaceWalkerUltraWideFix.ini from
+   MGS_PW\mgspw to a separate folder. Also keep the original pre-test backup.
+2. Copy BOTH winmm.dll and PeaceWalkerUltraWideFix.ini from this ZIP into mgspw,
+   beside METAL GEAR SOLID PEACE WALKER.exe. Do not reuse the test 1 INI.
+3. Keep Windows at 5120x2160 and keep the same launcher settings. Start as usual.
+4. Check the menu, then enter the tutorial and play for at least 20 seconds.
+   Take a screenshot showing the entire game window, including any bars.
+5. Close the game. Save PeaceWalkerUltraWideFix.log BEFORE restarting: each
+   launch replaces the previous log. Send its contents and the screenshot.
+6. ONLY if the scene now fills the screen correctly, change CenterHUD=0 to
+   CenterHUD=1, restart and send a second screenshot/log. Centered HUD is still
+   supported; it is initially disabled only to isolate the scene framing.
+
+The header must say v0.1.0-rc.5-resolution-test.2. The log should report
+Early resolution VERIFIED and later Cached framing with matches-target=1.
+At 5120x2160, the expected canvas and output-descriptor are 5120x2160 and the
+origin is 0,0. These CPU readings still need visual confirmation.
+
+If you see ERROR, persistent bars, offset/cropping or a crash, stop testing and
+send the saved log. Do not try to fix it with FollowActiveResolution; that option
+is retired. Do not disable antivirus. Report any detection instead.
+
+If asked for an A/B comparison: change ONLY EarlyResolution=1 to 0 and restart.
+This uses rc.5's height-based selection, not test 1's late row migration.
+Save separate logs before each restart.
+
+Width=0/Height=0 use the PRIMARY Windows desktop. Mention if you play on a
+secondary monitor; do not change resolution only in the INI for a native test.
+Mention the official launcher resolution/upscaling choices, or launcher bypass.
+
+ROLLBACK: close the game and restore the original pre-test winmm.dll and INI.
